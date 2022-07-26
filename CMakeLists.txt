@@ -84,6 +84,9 @@ if (PIC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 endif (PIC)
 
+# taskflow requires c++17
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+
 message(STATUS "ODGI CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message(STATUS "ODGI CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 message(STATUS "ODGI CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
@@ -467,6 +470,16 @@ ExternalProject_Add(xoshiro
 ExternalProject_Get_property(xoshiro SOURCE_DIR)
 set(xoshiro_INCLUDE "${SOURCE_DIR}")
 
+# header-only taskflow system
+ExternalProject_Add(taskflow
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/taskflow/taskflow"
+  UPDATE_COMMAND ""
+  INSTALL_COMMAND ""
+  BUILD_COMMAND ""
+  CONFIGURE_COMMAND "")
+ExternalProject_Get_property(taskflow SOURCE_DIR)
+set(taskflow_INCLUDE "${SOURCE_DIR}")
+
 ExternalProject_Add(atomicbitvector
         SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/atomicbitvector/include"
         UPDATE_COMMAND ""
@@ -635,6 +648,7 @@ set(odgi_DEPS
     mmmulti
     ips4o
     xoshiro
+    taskflow
     atomicqueue
     mio)
 
@@ -677,6 +691,7 @@ set(odgi_INCLUDES
   "${random_distributions_INCLUDE}"
   "${dirtyzipf_INCLUDE}"
   "${xoshiro_INCLUDE}"
+  "${taskflow_INCLUDE}"
   "${atomicbitvector_INCLUDE}"
   "${mio_INCLUDE}")
 
