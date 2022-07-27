@@ -104,20 +104,31 @@ PYBIND11_MODULE(odgi_ffi, m)
               odgi_generate_layout_file(graph, x_final, y_final, layout_file_name);
           });
     m.def("odgi_get_random_node_numpy_batch",
-          [](oRndNodeGenerator RNoG, int batch_size, bool cooling) {
+          [](oRndNodeGenerator RNoG, int batch_size, bool cooling, int nthreads) {
               int64_t *i = new int64_t[batch_size];
               int64_t *j = new int64_t[batch_size];
               int64_t *vis_i = new int64_t[batch_size];
               int64_t *vis_j = new int64_t[batch_size];
               double *d = new double[batch_size];
 
-              for (int idx = 0; idx < batch_size; idx++) {
-                  python_extension::random_nodes_pack_t p = RNoG->get_random_node_pack(cooling);
-                  i[idx] = p.id_n0;
-                  j[idx] = p.id_n1;
-                  vis_i[idx] = p.vis_p_n0;
-                  vis_j[idx] = p.vis_p_n1;
-                  d[idx] = p.distance;
+              auto loader_lambda =
+                    [&](uint64_t tid) {
+                        for (int idx = tid; idx < batch_size; idx = idx + nthreads) {
+                            python_extension::random_nodes_pack_t p = RNoG->get_random_node_pack(cooling);
+                            i[idx] = p.id_n0;
+                            j[idx] = p.id_n1;
+                            vis_i[idx] = p.vis_p_n0;
+                            vis_j[idx] = p.vis_p_n1;
+                            d[idx] = p.distance;
+                        }
+                    };
+
+              std::vector<std::thread> loaders(nthreads);
+              for (uint64_t t = 0; t < nthreads; t++) {
+                  loaders[t] = std::thread(loader_lambda, t);
+              }
+              for (thread &l : loaders) {
+                  l.join();
               }
 
               py::array_t<int64_t> i_np = py::array_t<int64_t>(batch_size, i);
