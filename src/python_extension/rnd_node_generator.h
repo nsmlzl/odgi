@@ -5,6 +5,9 @@
 #include "XoshiroCpp.hpp"
 #include "dirty_zipfian_int_distribution.h"
 
+#include <vector>
+#include <thread>
+
 namespace python_extension {
 
     struct random_nodes_pack_t {
@@ -21,6 +24,7 @@ namespace python_extension {
         ~RndNodeGenerator();
 
         random_nodes_pack_t get_random_node_pack(bool cooling);
+        void get_random_node_batch(int batch_size, int64_t *i, int64_t *j, int64_t *vis_i, int64_t *vis_j, double *d, bool cooling, int nthreads);
         uint64_t get_max_path_length(void);
 
         private:

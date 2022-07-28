@@ -152,6 +152,28 @@ namespace python_extension {
         return pack;
     }
 
+    void RndNodeGenerator::get_random_node_batch(int batch_size, int64_t *i, int64_t *j, int64_t *vis_i, int64_t *vis_j, double *d, bool cooling, int nthreads) {
+        auto loader_lambda =
+            [&](uint64_t tid) {
+                for (int idx = tid; idx < batch_size; idx = idx + nthreads) {
+                    random_nodes_pack_t p = this->get_random_node_pack(cooling);
+                    i[idx] = p.id_n0;
+                    j[idx] = p.id_n1;
+                    vis_i[idx] = p.vis_p_n0;
+                    vis_j[idx] = p.vis_p_n1;
+                    d[idx] = p.distance;
+                }
+            };
+
+        std::vector<std::thread> loaders(nthreads);
+        for (uint64_t t = 0; t < nthreads; t++) {
+            loaders[t] = std::thread(loader_lambda, t);
+        }
+        for (thread &l : loaders) {
+            l.join();
+        }
+    }
+
     uint64_t RndNodeGenerator::get_max_path_length(void) {
         return this->_space;
     }

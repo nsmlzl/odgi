@@ -111,25 +111,7 @@ PYBIND11_MODULE(odgi_ffi, m)
               int64_t *vis_j = new int64_t[batch_size];
               double *d = new double[batch_size];
 
-              auto loader_lambda =
-                    [&](uint64_t tid) {
-                        for (int idx = tid; idx < batch_size; idx = idx + nthreads) {
-                            python_extension::random_nodes_pack_t p = RNoG->get_random_node_pack(cooling);
-                            i[idx] = p.id_n0;
-                            j[idx] = p.id_n1;
-                            vis_i[idx] = p.vis_p_n0;
-                            vis_j[idx] = p.vis_p_n1;
-                            d[idx] = p.distance;
-                        }
-                    };
-
-              std::vector<std::thread> loaders(nthreads);
-              for (uint64_t t = 0; t < nthreads; t++) {
-                  loaders[t] = std::thread(loader_lambda, t);
-              }
-              for (thread &l : loaders) {
-                  l.join();
-              }
+              RNoG->get_random_node_batch(batch_size, i, j, vis_i, vis_j, d, cooling, nthreads);
 
               py::array_t<int64_t> i_np = py::array_t<int64_t>(batch_size, i);
               py::array_t<int64_t> j_np = py::array_t<int64_t>(batch_size, j);
