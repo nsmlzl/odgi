@@ -114,15 +114,16 @@ namespace odgi {
                         };
 
 
+                // some references to literal bitvectors in the path index hmmm
+                const sdsl::bit_vector &np_bv = path_index.get_np_bv();
+                const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
+                const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
+
                 auto step_lambda =
                         [&](uint64_t idx) {
                             // everyone tries to seed with their own random data
                             const std::uint64_t seed = 9399220 + idx;
                             XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
-                            // some references to literal bitvectors in the path index hmmm
-                            const sdsl::bit_vector &np_bv = path_index.get_np_bv();
-                            const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
-                            const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
                             // we'll sample from all path steps
                             std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
                             std::uniform_int_distribution<uint64_t> flip(0, 1);
