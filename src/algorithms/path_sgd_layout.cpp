@@ -89,28 +89,25 @@ namespace odgi {
                 // if we're in a final cooling phase (last 10%) of iterations
                 std::atomic<bool> cooling;
                 // current iteration
-                uint64_t iteration = 0;
+                volatile uint64_t iteration = 0;
 
 
                 auto init_lambda =
-                    []() {
-                        std::cout << "init" << std::endl;
+                    [&]() {
+                        iteration = 1;
                     };
 
 
                 // launch a thread to update the learning rate, count iterations, and decide when to stop
-                auto update_parameters_lambda =
+                auto config_params_lambda =
                         [&]() {
-                            iteration++;
-                            if (iteration < iter_max) {
-                                eta.store(etas[iteration]); // update our learning rate
-                                if (iteration >= first_cooling_iteration) {
-                                    cooling.store(true);
-                                } else {
-                                    cooling.store(false);
-                                }
+                            eta.store(etas[iteration-1]); // update our learning rate
+                            if (iteration >= first_cooling_iteration) {
+                                cooling.store(true);
+                            } else {
+                                cooling.store(false);
                             }
-                            std::cout << "iteration: " << iteration << " step size: " << eta.load() << " cooling: " << cooling.load() << std::endl;
+                            std::cout << "starting iteration: " << iteration << " step size: " << eta.load() << " cooling: " << cooling.load() << std::endl;
                         };
 
 
@@ -312,16 +309,28 @@ namespace odgi {
 #endif
                         };
 
-                // tf::Task task_init = taskflow.emplace(init_lambda).name("init");
-                tf::Task task_iter = taskflow.for_each_index(0, int{min_term_updates}, 1, step_lambda).name("iteration");
-                tf::Task task_update_params = taskflow.emplace(update_parameters_lambda).name("update_parameters");
+                auto iter_incr_lambda =
+                    [&]() {
+                        iteration++;
+                        return (iteration <= iter_max) ? false : true;
+                    };
 
-                // task_iter.succeed(task_init);
-                task_update_params.succeed(task_iter);
+
+                // tf::Task task_init = taskflow.emplace(init_lambda).name("init");
+                tf::Task task_init = taskflow.emplace(init_lambda).name("initialization");
+                tf::Task task_config_params = taskflow.emplace(config_params_lambda).name("configure_parameters");
+                tf::Task task_iter = taskflow.for_each_index(0, int{min_term_updates}, 1, step_lambda).name("iteration");
+                tf::Task task_incr_iter = taskflow.emplace(iter_incr_lambda).name("increment_iteration");
+                tf::Task task_finished = taskflow.emplace([](){}).name("finished");
+
+                task_config_params.succeed(task_init);
+                task_iter.succeed(task_config_params);
+                task_incr_iter.succeed(task_iter);
+                task_incr_iter.precede(task_config_params, task_finished);
 
                 taskflow.dump(std::cout);
 
-                executor.run_n(taskflow, iter_max).wait();
+                executor.run(taskflow).wait();
             }
 
             // drop out of atomic stuff... maybe not the best way to do this
