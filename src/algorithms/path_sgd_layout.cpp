@@ -35,6 +35,8 @@ namespace odgi {
             std::cerr << "space_quantization_step: " << space_quantization_step << std::endl;
             std::cerr << "cooling_start: " << cooling_start << std::endl;
 #endif
+            cuda_hello_host();
+
             tf::Executor executor;
             tf::Taskflow taskflow;
 

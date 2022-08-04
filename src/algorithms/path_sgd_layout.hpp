@@ -22,6 +22,8 @@
 
 #include <taskflow.hpp>
 
+#include "cuda/test.h"
+
 namespace odgi {
     namespace algorithms {
 
