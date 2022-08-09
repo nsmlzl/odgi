@@ -35,9 +35,10 @@ namespace odgi {
             std::cerr << "space_quantization_step: " << space_quantization_step << std::endl;
             std::cerr << "cooling_start: " << cooling_start << std::endl;
 #endif
-            tf::Executor executor;
-            tf::Taskflow taskflow;
+            tf::Executor executor(nthreads);
 
+            tf::Taskflow taskflow;
+            cerr << "===== Taskflow num_threads: " << nthreads << "=====" << endl;
             uint64_t first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
             //std::cerr << "first cooling iteration " << first_cooling_iteration << std::endl;
 
@@ -107,7 +108,7 @@ namespace odgi {
                             } else {
                                 cooling.store(false);
                             }
-                            std::cout << "starting iteration: " << iteration << " step size: " << eta.load() << " cooling: " << cooling.load() << std::endl;
+                            // std::cout << "starting iteration: " << iteration << " step size: " << eta.load() << " cooling: " << cooling.load() << std::endl;
                         };
 
 
@@ -342,7 +343,7 @@ namespace odgi {
                 }
                 task_incr_iter.precede(task_config_params, task_finished);
 
-                taskflow.dump(std::cout);
+                // taskflow.dump(std::cout);
 
                 executor.run(taskflow).wait();
             }
