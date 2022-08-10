@@ -35,10 +35,10 @@ namespace odgi {
             std::cerr << "space_quantization_step: " << space_quantization_step << std::endl;
             std::cerr << "cooling_start: " << cooling_start << std::endl;
 #endif
-            tf::Executor executor(nthreads);
+            // tf::Executor executor(nthreads);
 
-            tf::Taskflow taskflow;
-            cerr << "===== Taskflow num_threads: " << nthreads << "=====" << endl;
+            // tf::Taskflow taskflow;
+            cerr << "===== num_threads: " << nthreads << "=====" << endl;
             uint64_t first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
             //std::cerr << "first cooling iteration " << first_cooling_iteration << std::endl;
 
@@ -122,12 +122,12 @@ namespace odgi {
                 std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
                 std::uniform_int_distribution<uint64_t> flip(0, 1);
 
-                uint64_t nbr_tasks = 10000;
-                uint64_t nbr_loops = (min_term_updates / nbr_tasks) + 1;
-                if (min_term_updates < nbr_tasks) {
-                    nbr_tasks = min_term_updates;
-                    nbr_loops = 1;
-                }
+                // uint64_t nbr_tasks = 10000;
+                uint64_t nbr_loops = (min_term_updates / nthreads) + 1;
+                // if (min_term_updates < nthreads) {
+                //     nbr_tasks = min_term_updates;
+                //     nbr_loops = 1;
+                // }
 
                 auto step_lambda =
                         [&]() {
@@ -327,25 +327,30 @@ namespace odgi {
                     };
 
 
-                tf::Task task_init = taskflow.emplace(init_lambda).name("initialization");
-                tf::Task task_config_params = taskflow.emplace(config_params_lambda).name("configure_parameters");
-                std::vector<tf::Task> step{nbr_tasks};
-                for (int i = 0; i < nbr_tasks; i++) {
-                    step[i] = taskflow.emplace(step_lambda).name("step_" + to_string(i+1));
-                }
-                tf::Task task_incr_iter = taskflow.emplace(iter_incr_lambda).name("increment_iteration");
-                tf::Task task_finished = taskflow.emplace([](){}).name("finished");
 
-                task_config_params.succeed(task_init);
-                for (int i = 0; i < nbr_tasks; i++) {
-                    step[i].succeed(task_config_params);
-                    task_incr_iter.succeed(step[i]);
-                }
-                task_incr_iter.precede(task_config_params, task_finished);
 
-                // taskflow.dump(std::cout);
 
-                executor.run(taskflow).wait();
+                // std::thread initialization(init_lambda);
+                init_lambda();
+
+                do {
+                    config_params_lambda();
+
+                    std::vector<std::thread> workers;
+                    workers.reserve(nthreads);
+                    for (uint64_t t = 0; t < nthreads; t++) {
+                        workers.emplace_back(step_lambda);
+                    }
+                    // std::cout << workers.size() << std::endl;
+
+                    for (uint64_t t = 0; t < nthreads; t++) {
+                        workers[t].join();
+                    }
+                    
+                    // std::cout << "Workers joined" << std::endl;
+
+                } while (!iter_incr_lambda());
+
             }
 
             // drop out of atomic stuff... maybe not the best way to do this
