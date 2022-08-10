@@ -47,6 +47,7 @@ namespace odgi {
             }
             using namespace std::chrono_literals; // for timing stuff
             uint64_t num_nodes = graph.get_node_count();
+            /*
             // is a snapshot in progress?
             atomic<bool> snapshot_in_progress;
             snapshot_in_progress.store(false);
@@ -54,6 +55,7 @@ namespace odgi {
             std::vector<atomic<bool>> snapshot_progress(iter_max);
             // we will produce one less snapshot compared to iterations
             snapshot_progress[0].store(true);
+            */
             // seed them with the graph order
             uint64_t len = 0;
             // the longest path length measured in nucleotides
@@ -128,6 +130,7 @@ namespace odgi {
                         [&]() {
                             while (work_todo.load()) {
                                 if (term_updates.load() > min_term_updates) {
+                                    /*
                                     if (snapshot) {
                                         if (snapshot_progress[iteration].load() || iteration == iter_max) {
                                             iteration++;
@@ -141,9 +144,10 @@ namespace odgi {
                                             continue;
                                         }
                                     } else {
+                                    */
                                         iteration++;
-                                        snapshot_in_progress.store(false);
-                                    }
+                                        //snapshot_in_progress.store(false);
+                                    //}
                                     if (iteration > iter_max) {
                                         work_todo.store(false);
                                     } else if (Delta_max.load() <= delta) { // nb: this will also break at 0
@@ -182,7 +186,7 @@ namespace odgi {
                             std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
                             std::uniform_int_distribution<uint64_t> flip(0, 1);
                             while (work_todo.load()) {
-                                if (!snapshot_in_progress.load()) {
+                                //if (!snapshot_in_progress.load()) {
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
                                     uint64_t step_index = dis_step(gen);
@@ -373,10 +377,11 @@ namespace odgi {
                                     if (progress) {
                                         progress_meter->increment(1);
                                     }
-                                }
+                                //}
                             }
                         };
 
+                /*
                 auto snapshot_lambda =
                         [&]() {
                             uint64_t iter = 0;
@@ -407,9 +412,10 @@ namespace odgi {
                             }
 
                         };
+                */
 
                 std::thread checker(checker_lambda);
-                std::thread snapshot_thread(snapshot_lambda);
+                //std::thread snapshot_thread(snapshot_lambda);
 
                 std::vector<std::thread> workers;
                 workers.reserve(nthreads);
@@ -421,7 +427,7 @@ namespace odgi {
                     workers[t].join();
                 }
 
-                snapshot_thread.join();
+                //snapshot_thread.join();
 
                 checker.join();
             }
