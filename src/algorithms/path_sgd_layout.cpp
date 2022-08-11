@@ -117,7 +117,6 @@ namespace odgi {
                 const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
                 const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
 
-                atomic<uint64_t> seed = 939920;
                 // we'll sample from all path steps
                 std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
                 std::uniform_int_distribution<uint64_t> flip(0, 1);
@@ -130,9 +129,10 @@ namespace odgi {
                 }
 
                 auto step_lambda =
-                        [&]() {
+                        [&](uint64_t idx) {
                             // everyone tries to seed with their own random data
-                            XoshiroCpp::Xoshiro256Plus gen{seed++}; // a nice, fast PRNG
+                            uint64_t seed = 939920 + (iteration-1) * nbr_tasks + idx;
+                            XoshiroCpp::Xoshiro256Plus gen{seed}; // a nice, fast PRNG
 
                             for (int loop = 0; loop < nbr_loops; loop++) {
                                 // sample the first node from all the nodes in the graph
@@ -329,18 +329,13 @@ namespace odgi {
 
                 tf::Task task_init = taskflow.emplace(init_lambda).name("initialization");
                 tf::Task task_config_params = taskflow.emplace(config_params_lambda).name("configure_parameters");
-                std::vector<tf::Task> step{nbr_tasks};
-                for (int i = 0; i < nbr_tasks; i++) {
-                    step[i] = taskflow.emplace(step_lambda).name("step_" + to_string(i+1));
-                }
+                tf::Task task_iter = taskflow.for_each_index(0, int{nbr_tasks}, 1, step_lambda).name("iteration");
                 tf::Task task_incr_iter = taskflow.emplace(iter_incr_lambda).name("increment_iteration");
                 tf::Task task_finished = taskflow.emplace([](){}).name("finished");
 
                 task_config_params.succeed(task_init);
-                for (int i = 0; i < nbr_tasks; i++) {
-                    step[i].succeed(task_config_params);
-                    task_incr_iter.succeed(step[i]);
-                }
+                task_iter.succeed(task_config_params);
+                task_incr_iter.succeed(task_iter);
                 task_incr_iter.precede(task_config_params, task_finished);
 
                 // taskflow.dump(std::cout);
