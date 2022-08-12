@@ -154,9 +154,9 @@ namespace odgi {
                                 std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
 #endif
                                 size_t path_step_count = path_index.get_path_step_count(path);
-                                // if (path_step_count == 1){
-                                //     continue;
-                                // }
+                                if (path_step_count == 1){
+                                    continue;
+                                }
 
                                 if (cooling.load() || flip(gen)) {
                                     if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
