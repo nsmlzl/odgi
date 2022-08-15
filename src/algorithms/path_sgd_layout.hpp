@@ -20,7 +20,6 @@
 #include "XoshiroCpp.hpp"
 #include "progress.hpp"
 
-#include <taskflow.hpp>
 
 namespace odgi {
     namespace algorithms {

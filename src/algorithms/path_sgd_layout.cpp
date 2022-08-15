@@ -35,10 +35,8 @@ namespace odgi {
             std::cerr << "space_quantization_step: " << space_quantization_step << std::endl;
             std::cerr << "cooling_start: " << cooling_start << std::endl;
 #endif
-            // tf::Executor executor(nthreads);
-
-            // tf::Taskflow taskflow;
             cerr << "===== num_threads: " << nthreads << "=====" << endl;
+
             uint64_t first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
             //std::cerr << "first cooling iteration " << first_cooling_iteration << std::endl;
 
