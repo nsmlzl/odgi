@@ -24,7 +24,7 @@ cmake_minimum_required(VERSION 3.16)
 project(odgi)
 
 # Enforce c++17
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 # Command line switches. Compile with cmake -DINLINE_HANDLEGRAPH_SOURCES=ON
 option(PIC "Compile all odgi sources with -fPIC - required for shared libs" ON)
