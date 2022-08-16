@@ -20,7 +20,7 @@
 #include "XoshiroCpp.hpp"
 #include "progress.hpp"
 
-#include <barrier>
+#include <omp.h>
 
 namespace odgi {
     namespace algorithms {
