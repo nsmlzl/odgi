@@ -53,11 +53,11 @@ namespace odgi {
             uint64_t num_nodes = graph.get_node_count();
             // our positions in 1D
             std::vector<std::atomic<double>> X(num_nodes);
-            atomic<bool> snapshot_in_progress;
-            snapshot_in_progress.store(false);
-            std::vector<atomic<bool>> snapshot_progress(iter_max);
+            //atomic<bool> snapshot_in_progress;
+            //snapshot_in_progress.store(false);
+            //std::vector<atomic<bool>> snapshot_progress(iter_max);
             // we will produce one less snapshot compared to iterations
-            snapshot_progress[0].store(true);
+            //snapshot_progress[0].store(true);
             // seed them with the graph order
             uint64_t len = 0;
             graph.for_each_handle(
@@ -144,26 +144,33 @@ namespace odgi {
                     }
                 }
 
+                // some references to literal bitvectors in the path index hmmm
+                const sdsl::bit_vector &np_bv = path_index.get_np_bv();
+                const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
+                const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
+                // we'll sample from all path steps
+                std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
+                std::uniform_int_distribution<uint64_t> flip(0, 1);
+
+                uint64_t nbr_loops = (min_term_updates / nthreads) + 1;
                 // how many term updates we make
-                std::atomic<uint64_t> term_updates;
-                term_updates.store(0);
+                //std::atomic<uint64_t> term_updates;
+                //term_updates.store(0);
                 // learning rate
-                std::atomic<double> eta;
-                eta.store(etas.front());
+                volatile double eta = etas.front();
                 // adaptive zip theta
-                std::atomic<double> adj_theta;
-                adj_theta.store(theta);
+                volatile double adj_theta = theta;
                 // if we're in a final cooling phase (last 10%) of iterations
-                std::atomic<bool> cooling;
-                cooling.store(false);
+                volatile bool cooling = false;
                 // our max delta
                 std::atomic<double> Delta_max;
                 Delta_max.store(0);
-                // should we keep working?
-                std::atomic<bool> work_todo;
-                work_todo.store(true);
+                //// should we keep working?
+                //std::atomic<bool> work_todo;
+                //work_todo.store(true);
                 // approximately what iteration we're on
-                uint64_t iteration = 0;
+                volatile uint64_t iteration = 0;
+                /*
                 // launch a thread to update the learning rate, count iterations, and decide when to stop
                 auto checker_lambda =
                         [&]() {
@@ -208,207 +215,226 @@ namespace odgi {
                                 std::this_thread::sleep_for(1ms);
                             }
                         };
+                        */
+                auto config_params_lambda =
+                    [&]() {
+                        eta = etas[iteration];
+                        if (iteration >= first_cooling_iteration) {
+                            cooling = true;
+                            adj_theta = 0.001;
+                        }
+                        cooling = (iteration >= first_cooling_iteration) ? true : false;
+                        iteration++;
+                        std::cout << "starting iteration: " << iteration << " step size: " << eta << " cooling: " << cooling << std::endl;
+                    };
 
-                auto worker_lambda =
-                        [&](uint64_t tid) {
-                            // everyone tries to seed with their own random data
-                            const std::uint64_t seed = 9399220 + tid;
-                            XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
-                            // some references to literal bitvectors in the path index hmmm
-                            const sdsl::bit_vector &np_bv = path_index.get_np_bv();
-                            const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
-                            const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
-                            // we'll sample from all path steps
-                            std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
-                            std::uniform_int_distribution<uint64_t> flip(0, 1);
-                            while (work_todo.load()) {
-                                if (!snapshot_in_progress.load()) {
-                                    // sample the first node from all the nodes in the graph
-                                    // pick a random position from all paths
-                                    uint64_t step_index = dis_step(gen);
+                #pragma omp parallel num_threads(nthreads)
+                {
+                    int tid = omp_get_thread_num();
+                    // everyone tries to seed with their own random data
+                    const std::uint64_t seed = 9399220 + tid;
+                    XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
+
+                    uint64_t iteration_cp = 0;
+                    do {
+                        #pragma omp single
+                        config_params_lambda();
+                        // TODO: snapshot? (with extra barrier)
+
+                        #pragma omp barrier
+                        double eta_cp = eta;
+                        bool cooling_cp = cooling;
+                        double adj_theta_cp = adj_theta;
+                        iteration_cp = iteration;
+
+                        for (int loop = 0; loop < nbr_loops; loop++) {
+                            // sample the first node from all the nodes in the graph
+                            // pick a random position from all paths
+                            uint64_t step_index = dis_step(gen);
 #ifdef debug_sample_from_nodes
-                                    std::cerr << "step_index: " << step_index << std::endl;
+                            std::cerr << "step_index: " << step_index << std::endl;
 #endif
-                                    uint64_t path_i = npi_iv[step_index];
-                                    path_handle_t path = as_path_handle(path_i);
+                            uint64_t path_i = npi_iv[step_index];
+                            path_handle_t path = as_path_handle(path_i);
 #ifdef debug_sample_from_nodes
-                                    std::cerr << "path integer: " << path_i << std::endl;
+                            std::cerr << "path integer: " << path_i << std::endl;
 #endif
-                                    step_handle_t step_a, step_b;
-                                    as_integers(step_a)[0] = path_i; // path index
-                                    size_t s_rank = nr_iv[step_index] - 1; // step rank in path
-                                    as_integers(step_a)[1] = s_rank;
+                            step_handle_t step_a, step_b;
+                            as_integers(step_a)[0] = path_i; // path index
+                            size_t s_rank = nr_iv[step_index] - 1; // step rank in path
+                            as_integers(step_a)[1] = s_rank;
 #ifdef debug_sample_from_nodes
-                                    std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
+                            std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
 #endif
-                                    size_t path_step_count = path_index.get_path_step_count(path);
-                                    if (path_step_count == 1){
-                                        continue;
+                            size_t path_step_count = path_index.get_path_step_count(path);
+                            if (path_step_count == 1){
+                                continue;
+                            }
+
+                            if (cooling_cp || flip(gen)) {
+                                auto _theta = adj_theta_cp;
+                                if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
+                                    // go backward
+                                    uint64_t jump_space = std::min(space, s_rank);
+                                    uint64_t space = jump_space;
+                                    if (jump_space > space_max){
+                                        space = space_max + (jump_space - space_max) / space_quantization_step + 1;
                                     }
-
-                                    if (cooling.load() || flip(gen)) {
-                                        auto _theta = adj_theta.load();
-                                        if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
-                                            // go backward
-                                            uint64_t jump_space = std::min(space, s_rank);
-                                            uint64_t space = jump_space;
-                                            if (jump_space > space_max){
-                                                space = space_max + (jump_space - space_max) / space_quantization_step + 1;
-                                            }
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, _theta, zetas[space]);
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
-                                            uint64_t z_i = z(gen);
-                                            //assert(z_i <= path_space);
-                                            as_integers(step_b)[0] = as_integer(path);
-                                            as_integers(step_b)[1] = s_rank - z_i;
-                                        } else {
-                                            // go forward
-                                            uint64_t jump_space = std::min(space, path_step_count - s_rank - 1);
-                                            uint64_t space = jump_space;
-                                            if (jump_space > space_max){
-                                                space = space_max + (jump_space - space_max) / space_quantization_step + 1;
-                                            }
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, _theta, zetas[space]);
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
-                                            uint64_t z_i = z(gen);
-                                            //assert(z_i <= path_space);
-                                            as_integers(step_b)[0] = as_integer(path);
-                                            as_integers(step_b)[1] = s_rank + z_i;
-                                        }
-                                    } else {
-                                        // sample randomly across the path
-                                        graph.get_step_count(path);
-                                        std::uniform_int_distribution<uint64_t> rando(0, graph.get_step_count(path)-1);
-                                        as_integers(step_b)[0] = as_integer(path);
-                                        as_integers(step_b)[1] = rando(gen);
+                                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, _theta, zetas[space]);
+                                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                                    uint64_t z_i = z(gen);
+                                    //assert(z_i <= path_space);
+                                    as_integers(step_b)[0] = as_integer(path);
+                                    as_integers(step_b)[1] = s_rank - z_i;
+                                } else {
+                                    // go forward
+                                    uint64_t jump_space = std::min(space, path_step_count - s_rank - 1);
+                                    uint64_t space = jump_space;
+                                    if (jump_space > space_max){
+                                        space = space_max + (jump_space - space_max) / space_quantization_step + 1;
                                     }
+                                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, _theta, zetas[space]);
+                                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                                    uint64_t z_i = z(gen);
+                                    //assert(z_i <= path_space);
+                                    as_integers(step_b)[0] = as_integer(path);
+                                    as_integers(step_b)[1] = s_rank + z_i;
+                                }
+                            } else {
+                                // sample randomly across the path
+                                graph.get_step_count(path);
+                                std::uniform_int_distribution<uint64_t> rando(0, graph.get_step_count(path)-1);
+                                as_integers(step_b)[0] = as_integer(path);
+                                as_integers(step_b)[1] = rando(gen);
+                            }
 
-                                    // and the graph handles, which we need to record the update
-                                    handle_t term_i = path_index.get_handle_of_step(step_a);
-                                    handle_t term_j = path_index.get_handle_of_step(step_b);
+                            // and the graph handles, which we need to record the update
+                            handle_t term_i = path_index.get_handle_of_step(step_a);
+                            handle_t term_j = path_index.get_handle_of_step(step_b);
 
-									bool update_term_i = true;
-									bool update_term_j = true;
+                            bool update_term_i = true;
+                            bool update_term_j = true;
 
 
-									// Check which terms we actually have to update
-									if (target_sorting) {
-										if (target_nodes[graph.get_id(term_i) - 1]) {
-											update_term_i = false;
-										}
-										if (target_nodes[graph.get_id(term_j) - 1]) {
-											update_term_j = false;
-										}
-									}
-									if (!update_term_j && !update_term_i) {
-										// we also have to update the number of terms here, because else we will over sample and the sorting will take much longer
-										term_updates++; // atomic
-										if (progress) {
-											progress_meter->increment(1);
-										}
-										continue;
-									}
-
-                                    // adjust the positions to the node starts
-                                    size_t pos_in_path_a = path_index.get_position_of_step(step_a);
-                                    size_t pos_in_path_b = path_index.get_position_of_step(step_b);
-#ifdef debug_path_sgd
-                                    std::cerr << "1. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
-#endif
-                                    // assert(pos_in_path_a < path_index.get_path_length(path));
-                                    // assert(pos_in_path_b < path_index.get_path_length(path));
-
-#ifdef debug_path_sgd
-                                    std::cerr << "2. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
-#endif
-                                    // establish the term distance
-                                    double term_dist = std::abs(
-                                            static_cast<double>(pos_in_path_a) - static_cast<double>(pos_in_path_b));
-
-                                    if (term_dist == 0) {
-                                        continue;
-                                        // term_dist = 1e-9;
-                                    }
-#ifdef eval_path_sgd
-                                    std::string path_name = path_index.get_path_name(path);
-                                std::cerr << path_name << "\t" << pos_in_path_a << "\t" << pos_in_path_b << "\t" << term_dist << std::endl;
-#endif
-                                    // assert(term_dist == zipf_int);
-#ifdef debug_path_sgd
-                                    std::cerr << "term_dist: " << term_dist << std::endl;
-#endif
-                                    double term_weight = 1.0 / term_dist;
-
-                                    double w_ij = term_weight;
-#ifdef debug_path_sgd
-                                    std::cerr << "w_ij = " << w_ij << std::endl;
-#endif
-                                    double mu = eta.load() * w_ij;
-                                    if (mu > 1) {
-                                        mu = 1;
-                                    }
-                                    // actual distance in graph
-                                    double d_ij = term_dist;
-                                    // identities
-                                    uint64_t i = number_bool_packing::unpack_number(term_i);
-                                    uint64_t j = number_bool_packing::unpack_number(term_j);
-#ifdef debug_path_sgd
-                                    #pragma omp critical (cerr)
-                                std::cerr << "nodes are " << graph.get_id(term_i) << " and " << graph.get_id(term_j) << std::endl;
-#endif
-                                    // distance == magnitude in our 1D situation
-                                    double dx = X[i].load() - X[j].load();
-                                    if (dx == 0) {
-                                        dx = 1e-9; // avoid nan
-                                    }
-#ifdef debug_path_sgd
-                                    #pragma omp critical (cerr)
-                                std::cerr << "distance is " << dx << " but should be " << d_ij << std::endl;
-#endif
-                                    //double mag = dx; //sqrt(dx*dx + dy*dy);
-                                    double mag = std::abs(dx);
-#ifdef debug_path_sgd
-                                    std::cerr << "mu " << mu << " mag " << mag << " d_ij " << d_ij << std::endl;
-#endif
-                                    // check distances for early stopping
-                                    double Delta = mu * (mag - d_ij) / 2;
-                                    // try until we succeed. risky.
-                                    double Delta_abs = std::abs(Delta);
-#ifdef debug_path_sgd
-                                    #pragma omp critical (cerr)
-                                std::cerr << "Delta_abs " << Delta_abs << std::endl;
-#endif
-                                    while (Delta_abs > Delta_max.load()) {
-                                        Delta_max.store(Delta_abs);
-                                    }
-                                    // calculate update
-                                    double r = Delta / mag;
-                                    double r_x = r * dx;
-#ifdef debug_path_sgd
-                                    #pragma omp critical (cerr)
-                                std::cerr << "r_x is " << r_x << std::endl;
-#endif
-                                    // update our positions (atomically)
-#ifdef debug_path_sgd
-                                    std::cerr << "before X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
-#endif
-									if (update_term_i) {
-										X[i].store(X[i].load() - r_x);
-									}
-									if (update_term_j) {
-										X[j].store(X[j].load() + r_x);
-									}
-#ifdef debug_path_sgd
-                                    std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
-#endif
-                                    term_updates++; // atomic
-                                    if (progress) {
-                                        progress_meter->increment(1);
-                                    }
+                            // Check which terms we actually have to update
+                            if (target_sorting) {
+                                if (target_nodes[graph.get_id(term_i) - 1]) {
+                                    update_term_i = false;
+                                }
+                                if (target_nodes[graph.get_id(term_j) - 1]) {
+                                    update_term_j = false;
                                 }
                             }
-                        };
+                            if (!update_term_j && !update_term_i) {
+                                // we also have to update the number of terms here, because else we will over sample and the sorting will take much longer
+                                //term_updates++; // atomic
+                                //if (progress) {
+                                    //progress_meter->increment(1);
+                                //}
+                                continue;
+                            }
 
+                            // adjust the positions to the node starts
+                            size_t pos_in_path_a = path_index.get_position_of_step(step_a);
+                            size_t pos_in_path_b = path_index.get_position_of_step(step_b);
+#ifdef debug_path_sgd
+                            std::cerr << "1. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
+#endif
+                            // assert(pos_in_path_a < path_index.get_path_length(path));
+                            // assert(pos_in_path_b < path_index.get_path_length(path));
+
+#ifdef debug_path_sgd
+                            std::cerr << "2. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
+#endif
+                            // establish the term distance
+                            double term_dist = std::abs(
+                                    static_cast<double>(pos_in_path_a) - static_cast<double>(pos_in_path_b));
+
+                            if (term_dist == 0) {
+                                continue;
+                                // term_dist = 1e-9;
+                            }
+#ifdef eval_path_sgd
+                            std::string path_name = path_index.get_path_name(path);
+                            std::cerr << path_name << "\t" << pos_in_path_a << "\t" << pos_in_path_b << "\t" << term_dist << std::endl;
+#endif
+                            // assert(term_dist == zipf_int);
+#ifdef debug_path_sgd
+                            std::cerr << "term_dist: " << term_dist << std::endl;
+#endif
+                            double term_weight = 1.0 / term_dist;
+
+                            double w_ij = term_weight;
+#ifdef debug_path_sgd
+                            std::cerr << "w_ij = " << w_ij << std::endl;
+#endif
+                            double mu = eta_cp * w_ij;
+                            if (mu > 1) {
+                                mu = 1;
+                            }
+                            // actual distance in graph
+                            double d_ij = term_dist;
+                            // identities
+                            uint64_t i = number_bool_packing::unpack_number(term_i);
+                            uint64_t j = number_bool_packing::unpack_number(term_j);
+#ifdef debug_path_sgd
+#pragma omp critical (cerr)
+                            std::cerr << "nodes are " << graph.get_id(term_i) << " and " << graph.get_id(term_j) << std::endl;
+#endif
+                            // distance == magnitude in our 1D situation
+                            double dx = X[i].load() - X[j].load();
+                            if (dx == 0) {
+                                dx = 1e-9; // avoid nan
+                            }
+#ifdef debug_path_sgd
+#pragma omp critical (cerr)
+                            std::cerr << "distance is " << dx << " but should be " << d_ij << std::endl;
+#endif
+                            //double mag = dx; //sqrt(dx*dx + dy*dy);
+                            double mag = std::abs(dx);
+#ifdef debug_path_sgd
+                            std::cerr << "mu " << mu << " mag " << mag << " d_ij " << d_ij << std::endl;
+#endif
+                            // check distances for early stopping
+                            double Delta = mu * (mag - d_ij) / 2;
+                            // try until we succeed. risky.
+                            double Delta_abs = std::abs(Delta);
+#ifdef debug_path_sgd
+#pragma omp critical (cerr)
+                            std::cerr << "Delta_abs " << Delta_abs << std::endl;
+#endif
+                            //while (Delta_abs > Delta_max.load()) {
+                                //Delta_max.store(Delta_abs);
+                            //}
+                            // calculate update
+                            double r = Delta / mag;
+                            double r_x = r * dx;
+#ifdef debug_path_sgd
+#pragma omp critical (cerr)
+                            std::cerr << "r_x is " << r_x << std::endl;
+#endif
+                            // update our positions (atomically)
+#ifdef debug_path_sgd
+                            std::cerr << "before X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
+#endif
+                            if (update_term_i) {
+                                X[i].store(X[i].load() - r_x);
+                            }
+                            if (update_term_j) {
+                                X[j].store(X[j].load() + r_x);
+                            }
+#ifdef debug_path_sgd
+                            std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
+#endif
+                            //term_updates++; // atomic
+                            //if (progress) {
+                                //progress_meter->increment(1);
+                            //}
+                        }
+                    } while (iteration_cp < iter_max);
+                }
+
+                /*
                 auto snapshot_lambda =
                         [&](void) {
                             uint64_t iter = 0;
@@ -435,23 +461,8 @@ namespace odgi {
                             }
 
                         };
+                        */
 
-                std::thread checker(checker_lambda);
-                std::thread snapshot_thread(snapshot_lambda);
-
-                std::vector<std::thread> workers;
-                workers.reserve(nthreads);
-                for (uint64_t t = 0; t < nthreads; ++t) {
-                    workers.emplace_back(worker_lambda, t);
-                }
-
-                for (uint64_t t = 0; t < nthreads; ++t) {
-                    workers[t].join();
-                }
-
-                snapshot_thread.join();
-
-                checker.join();
             }
 
             if (progress) {
