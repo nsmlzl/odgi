@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <random>
 #include <set>
+#include <omp.h>
 #include <thread>
 #include <atomic>
 #include <handlegraph/path_handle_graph.hpp>
