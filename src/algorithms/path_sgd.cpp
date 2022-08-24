@@ -223,6 +223,7 @@ namespace odgi {
                             std::uniform_int_distribution<uint64_t> flip(0, 1);
                             while (work_todo.load()) {
                                 if (!snapshot_in_progress.load()) {
+                                for (int s = 0; s < 1000; s++) {
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
                                     uint64_t step_index = dis_step(gen);
@@ -407,6 +408,7 @@ namespace odgi {
                                     if (progress) {
                                         progress_meter->increment(1);
                                     }
+                                }
                                 }
                             }
                         };
