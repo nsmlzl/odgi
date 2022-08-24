@@ -209,18 +209,19 @@ namespace odgi {
                             }
                         };
 
+                // some references to literal bitvectors in the path index hmmm
+                const sdsl::bit_vector &np_bv = path_index.get_np_bv();
+                const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
+                const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
+                // we'll sample from all path steps
+                std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
+                std::uniform_int_distribution<uint64_t> flip(0, 1);
+
                 auto worker_lambda =
                         [&](uint64_t tid) {
                             // everyone tries to seed with their own random data
                             const std::uint64_t seed = 9399220 + tid;
                             XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
-                            // some references to literal bitvectors in the path index hmmm
-                            const sdsl::bit_vector &np_bv = path_index.get_np_bv();
-                            const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
-                            const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
-                            // we'll sample from all path steps
-                            std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
-                            std::uniform_int_distribution<uint64_t> flip(0, 1);
                             while (work_todo.load()) {
                                 if (!snapshot_in_progress.load()) {
                                 for (int s = 0; s < 1000; s++) {
