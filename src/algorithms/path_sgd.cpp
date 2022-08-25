@@ -224,7 +224,8 @@ namespace odgi {
                             XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
                             while (work_todo.load()) {
                                 if (!snapshot_in_progress.load()) {
-                                for (int s = 0; s < 1000; s++) {
+                                const int steps_per_check = 1000;
+                                for (int s = 0; s < steps_per_check; s++) {
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
                                     uint64_t step_index = dis_step(gen);
@@ -306,7 +307,7 @@ namespace odgi {
 									}
 									if (!update_term_j && !update_term_i) {
 										// we also have to update the number of terms here, because else we will over sample and the sorting will take much longer
-										term_updates++; // atomic
+										//term_updates++; // atomic
 										//if (progress) {
 											//progress_meter->increment(1);
 										//}
@@ -405,11 +406,12 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
-                                    term_updates++; // atomic
+                                    //term_updates++; // atomic
                                     //if (progress) {
                                         //progress_meter->increment(1);
                                     //}
                                 }
+                                term_updates += steps_per_check;
                                 }
                             }
                         };
