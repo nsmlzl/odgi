@@ -307,9 +307,9 @@ namespace odgi {
 									if (!update_term_j && !update_term_i) {
 										// we also have to update the number of terms here, because else we will over sample and the sorting will take much longer
 										term_updates++; // atomic
-										if (progress) {
-											progress_meter->increment(1);
-										}
+										//if (progress) {
+											//progress_meter->increment(1);
+										//}
 										continue;
 									}
 
@@ -406,9 +406,9 @@ namespace odgi {
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
                                     term_updates++; // atomic
-                                    if (progress) {
-                                        progress_meter->increment(1);
-                                    }
+                                    //if (progress) {
+                                        //progress_meter->increment(1);
+                                    //}
                                 }
                                 }
                             }
