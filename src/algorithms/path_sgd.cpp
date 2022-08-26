@@ -187,7 +187,7 @@ namespace odgi {
                                     }
                                     if (iteration > iter_max) {
                                         work_todo.store(false);
-                                    } else if (Delta_max.load() <= delta) { // nb: this will also break at 0
+                                    } else if (Delta_max.load() < delta) { // nb: this will also break at 0
                                         if (progress) {
                                             std::cerr << "[odgi::path_linear_sgd] delta_max: " << Delta_max.load()
                                                       << " <= delta: "
@@ -383,9 +383,9 @@ namespace odgi {
                                     #pragma omp critical (cerr)
                                 std::cerr << "Delta_abs " << Delta_abs << std::endl;
 #endif
-                                    while (Delta_abs > Delta_max.load()) {
-                                        Delta_max.store(Delta_abs);
-                                    }
+                                    //while (Delta_abs > Delta_max.load()) {
+                                        //Delta_max.store(Delta_abs);
+                                    //}
                                     // calculate update
                                     double r = Delta / mag;
                                     double r_x = r * dx;
