@@ -225,6 +225,9 @@ namespace odgi {
                             while (work_todo.load()) {
                                 if (!snapshot_in_progress.load()) {
                                 const int steps_per_check = 1000;
+                                const double eta_cp = eta;
+                                const double adj_theta_cp = adj_theta;
+                                const bool cooling_cp = cooling;
                                 for (int s = 0; s < steps_per_check; s++) {
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
@@ -251,8 +254,8 @@ namespace odgi {
                                     std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
 #endif
 
-                                    if (cooling.load() || flip(gen)) {
-                                        auto _theta = adj_theta.load();
+                                    if (cooling_cp || flip(gen)) {
+                                        auto _theta = adj_theta_cp;
                                         if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
                                             // go backward
                                             uint64_t jump_space = std::min(space, s_rank);
@@ -348,7 +351,7 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "w_ij = " << w_ij << std::endl;
 #endif
-                                    double mu = eta.load() * w_ij;
+                                    double mu = eta_cp * w_ij;
                                     if (mu > 1) {
                                         mu = 1;
                                     }
