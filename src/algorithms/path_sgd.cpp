@@ -305,10 +305,6 @@ namespace odgi {
 										}
 									}
 									if (!update_term_j && !update_term_i) {
-										// we also have to update the number of terms here, because else we will over sample and the sorting will take much longer
-										if (progress) {
-											progress_meter->increment(1);
-										}
 										continue;
 									}
 
@@ -404,11 +400,11 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
-                                    if (progress) {
-                                        progress_meter->increment(1);
-                                    }
                                 }
                                 term_updates += steps_per_check;
+                                if (progress) {
+                                    progress_meter->increment(steps_per_check);
+                                }
                                 }
                             }
                         };
