@@ -221,9 +221,10 @@ namespace odgi {
                             // we'll sample from all path steps
                             std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
                             std::uniform_int_distribution<uint64_t> flip(0, 1);
-                            uint64_t steps_since_store = 0;
+                            const uint64_t steps_per_check = 1000;
                             while (work_todo.load()) {
                                 if (!snapshot_in_progress.load()) {
+                                for (uint64_t step = 0; step < steps_per_check; step++) {
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
                                     uint64_t step_index = dis_step(gen);
@@ -305,7 +306,6 @@ namespace odgi {
 									}
 									if (!update_term_j && !update_term_i) {
 										// we also have to update the number of terms here, because else we will over sample and the sorting will take much longer
-										steps_since_store++;
 										if (progress) {
 											progress_meter->increment(1);
 										}
@@ -404,14 +404,11 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
-                                    steps_since_store++;
-                                    if (steps_since_store >= 1000) {
-                                        term_updates += steps_since_store;
-                                        steps_since_store = 0;
-                                    }
                                     if (progress) {
                                         progress_meter->increment(1);
                                     }
+                                }
+                                term_updates += steps_per_check;
                                 }
                             }
                         };
