@@ -224,6 +224,7 @@ namespace odgi {
                             const uint64_t steps_per_check = 1000;
                             while (work_todo.load()) {
                                 if (!snapshot_in_progress.load()) {
+                                double delta_max_local = 0.0;
                                 for (uint64_t step = 0; step < steps_per_check; step++) {
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
@@ -377,8 +378,8 @@ namespace odgi {
                                     #pragma omp critical (cerr)
                                 std::cerr << "Delta_abs " << Delta_abs << std::endl;
 #endif
-                                    while (Delta_abs > Delta_max.load()) {
-                                        Delta_max.store(Delta_abs);
+                                    while (Delta_abs > delta_max_local) {
+                                        delta_max_local = Delta_abs;
                                     }
                                     // calculate update
                                     double r = Delta / mag;
@@ -404,6 +405,9 @@ namespace odgi {
                                 term_updates += steps_per_check;
                                 if (progress) {
                                     progress_meter->increment(steps_per_check);
+                                }
+                                if (delta_max_local > Delta_max.load()) {
+                                    Delta_max.store(delta_max_local);
                                 }
                                 }
                             }
