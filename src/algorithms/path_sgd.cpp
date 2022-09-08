@@ -239,7 +239,24 @@ namespace odgi {
                     do {
                         #pragma omp single
                         config_params_lambda();
-                        // TODO: snapshot? (with extra barrier)
+
+                        if (snapshot) {
+                            #pragma omp barrier
+                            #pragma omp single
+                            {
+                                std::cerr << "[odgi::path_linear_sgd] Taking snapshot!" << std::endl;
+                                // create temp file
+                                std::string snapshot_tmp_file = xp::temp_file::create("snapshot");
+                                // write to temp file
+                                ofstream snapshot_stream;
+                                snapshot_stream.open(snapshot_tmp_file);
+                                for (auto &x : X) {
+                                    snapshot_stream << x << std::endl;
+                                }
+                                // push back the name of the temp file
+                                snapshots.push_back(snapshot_tmp_file);
+                            }
+                        }
 
                         #pragma omp barrier
                         double eta_cp = eta;
