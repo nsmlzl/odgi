@@ -1,5 +1,7 @@
 #include "path_sgd_layout.hpp"
 #include "algorithms/layout.hpp"
+#include <chrono>
+#define profile_time
 
 namespace odgi {
     namespace algorithms {
@@ -171,6 +173,18 @@ namespace odgi {
 
                 auto worker_lambda =
                         [&](uint64_t tid) {
+
+#ifdef profile_time
+                            // timer initialization
+                            auto total_duration_dist = std::chrono::duration<double>::zero(); // total time on computing distance: in seconds
+                            auto total_duration_sgd = std::chrono::duration<double>::zero(); // total time on SGD: in seconds
+
+                            std::chrono::high_resolution_clock::time_point start_dist;
+                            std::chrono::high_resolution_clock::time_point end_dist;
+                            std::chrono::high_resolution_clock::time_point start_sgd;
+                            std::chrono::high_resolution_clock::time_point end_sgd;
+#endif                     
+
                             // everyone tries to seed with their own random data
                             const std::uint64_t seed = 9399220 + tid;
                             XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
@@ -184,6 +198,12 @@ namespace odgi {
                             uint64_t steps_since_term_updates = 0;
                             while (work_todo.load()) {
                                 if (!snapshot_in_progress.load()) {
+
+#ifdef profile_time
+                                    // 1. Calculate Distance: Start. 
+                                    start_dist = std::chrono::high_resolution_clock::now();
+#endif
+
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
                                     uint64_t step_index = dis_step(gen);
@@ -290,6 +310,17 @@ namespace odgi {
                                     if (term_dist == 0) {
                                         term_dist = 1e-9;
                                     }
+
+#ifdef profile_time                                    
+                                    // 1. Calculate Distance: End. 
+                                    end_dist = std::chrono::high_resolution_clock::now();
+                                    total_duration_dist += std::chrono::duration_cast<std::chrono::nanoseconds>(end_dist - start_dist);
+
+                                    // 2. SGD Update: Start.
+                                    start_sgd = std::chrono::high_resolution_clock::now();
+#endif
+
+
 #ifdef eval_path_sgd
                                     std::string path_name = path_index.get_path_name(path);
                                 std::cerr << path_name << "\t" << pos_in_path_a << "\t" << pos_in_path_b << "\t" << term_dist << std::endl;
@@ -371,6 +402,13 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
+
+#ifdef profile_time                                    
+                                    // 2. SGD Update: End.
+                                    end_sgd = std::chrono::high_resolution_clock::now();
+                                    total_duration_sgd += std::chrono::duration_cast<std::chrono::nanoseconds>(end_sgd - start_sgd);
+#endif 
+
                                     steps_since_term_updates++;
                                     if ((steps_since_term_updates % 1000) == 0) {
                                         term_updates += steps_since_term_updates;
@@ -381,6 +419,17 @@ namespace odgi {
                                     }
                                 }
                             }
+#ifdef profile_time                   
+                            // end of while loop
+                            std::stringstream msg; 
+                            msg << "Thread[" << tid << "]: Dataloading time = " << total_duration_dist.count() << " sec;\t" << "Compute time = " << total_duration_sgd.count() << " sec." << std::endl; 
+                            std::cerr << msg.str();
+                            // std::cerr << std::endl;
+                            // std::cerr << "Thread ID: " << tid << std::endl \
+                            //           << "Time for Distance: " << total_duration_dist.count() << " seconds" << std::endl \
+                            //           << "Time for SGD: " << total_duration_sgd.count() << " seconds" << std::endl \
+                            //           << std::flush << std::endl;
+#endif
                         };
 
                 auto snapshot_lambda =
