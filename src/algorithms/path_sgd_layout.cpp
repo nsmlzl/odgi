@@ -2,6 +2,7 @@
 #include "algorithms/layout.hpp"
 #include <chrono>
 #define profile_time
+#define profile_time_update_breakdown
 
 namespace odgi {
     namespace algorithms {
@@ -178,12 +179,28 @@ namespace odgi {
                             // timer initialization
                             auto total_duration_dist = std::chrono::duration<double>::zero(); // total time on computing distance: in seconds
                             auto total_duration_sgd = std::chrono::duration<double>::zero(); // total time on SGD: in seconds
-
+#endif 
+#ifdef profile_time_update_breakdown
+                            // detailed analysis on different parts of Update
+                            auto total_duration_compute_first = std::chrono::duration<double>::zero();
+                            auto total_duration_load = std::chrono::duration<double>::zero();
+                            auto total_duration_compute_second = std::chrono::duration<double>::zero();
+                            auto total_duration_store = std::chrono::duration<double>::zero();
+#endif
+#ifdef profile_time
                             std::chrono::high_resolution_clock::time_point start_dist;
                             std::chrono::high_resolution_clock::time_point end_dist;
                             std::chrono::high_resolution_clock::time_point start_sgd;
                             std::chrono::high_resolution_clock::time_point end_sgd;
-#endif                     
+#endif
+#ifdef profile_time_update_breakdown
+                            // detailed analysis on Update part
+                            std::chrono::high_resolution_clock::time_point before_load;
+                            std::chrono::high_resolution_clock::time_point after_load;
+                            std::chrono::high_resolution_clock::time_point before_store;
+                            std::chrono::high_resolution_clock::time_point after_store;
+#endif
+                   
 
                             // everyone tries to seed with their own random data
                             const std::uint64_t seed = 9399220 + tid;
@@ -357,8 +374,19 @@ namespace odgi {
                                     if (use_other_end_b) {
                                         offset_j += 1;
                                     }
+#ifdef profile_time_update_breakdown
+                                    // Before Load
+                                    before_load = std::chrono::high_resolution_clock::now();
+                                    total_duration_compute_first += std::chrono::duration_cast<std::chrono::nanoseconds>(before_load - start_sgd);
+#endif
                                     double dx = X[2 * i + offset_i].load() - X[2 * j + offset_j].load();
                                     double dy = Y[2 * i + offset_i].load() - Y[2 * j + offset_j].load();
+#ifdef profile_time_update_breakdown
+                                    // After Load
+                                    after_load = std::chrono::high_resolution_clock::now();
+                                    total_duration_load += std::chrono::duration_cast<std::chrono::nanoseconds>(after_load - before_load);
+#endif
+
                                     if (dx == 0) {
                                         dx = 1e-9; // avoid nan
                                     }
@@ -395,10 +423,22 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "before X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
+
+#ifdef profile_time_update_breakdown
+                                    // Before Store
+                                    before_store = std::chrono::high_resolution_clock::now();
+                                    total_duration_compute_second += std::chrono::duration_cast<std::chrono::nanoseconds>(before_store - after_load);
+#endif
                                     X[2 * i + offset_i].store(X[2 * i + offset_i].load() - r_x);
                                     Y[2 * i + offset_i].store(Y[2 * i + offset_i].load() - r_y);
                                     X[2 * j + offset_j].store(X[2 * j + offset_j].load() + r_x);
                                     Y[2 * j + offset_j].store(Y[2 * j + offset_j].load() + r_y);
+#ifdef profile_time_update_breakdown
+                                    // After Store
+                                    after_store = std::chrono::high_resolution_clock::now();
+                                    total_duration_store += std::chrono::duration_cast<std::chrono::nanoseconds>(after_store - before_store);
+#endif
+
 #ifdef debug_path_sgd
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
@@ -423,12 +463,12 @@ namespace odgi {
                             // end of while loop
                             std::stringstream msg; 
                             msg << "Thread[" << tid << "]: Dataloading time = " << total_duration_dist.count() << " sec;\t" << "Compute time = " << total_duration_sgd.count() << " sec." << std::endl; 
+#endif
+#ifdef profile_time_update_breakdown
+                            msg << "Computation Part Breakdown: [0]: " << total_duration_compute_first.count() << " sec;\t[1]: " << total_duration_load.count() << " sec;\t[2]: " << total_duration_compute_second.count() << " sec;\t[3]: " << total_duration_store.count() << " sec." << std::endl;
+#endif
+#ifdef profile_time
                             std::cerr << msg.str();
-                            // std::cerr << std::endl;
-                            // std::cerr << "Thread ID: " << tid << std::endl \
-                            //           << "Time for Distance: " << total_duration_dist.count() << " seconds" << std::endl \
-                            //           << "Time for SGD: " << total_duration_sgd.count() << " seconds" << std::endl \
-                            //           << std::flush << std::endl;
 #endif
                         };
 
