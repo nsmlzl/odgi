@@ -6,7 +6,7 @@
 #include "dirty_zipfian_int_distribution.h"
 
 #include <vector>
-#include <thread>
+#include <omp.h>
 
 namespace python_extension {
 
@@ -38,6 +38,8 @@ namespace python_extension {
         uint64_t _space_max;
         uint64_t _space_quantization_step;
         std::vector<double> _zetas;
+
+        uint64_t _counter;
 
         XoshiroCpp::Xoshiro256Plus _rng_gen;
         std::uniform_int_distribution<uint64_t> _dis_step;
