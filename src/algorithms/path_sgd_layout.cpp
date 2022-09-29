@@ -3,6 +3,7 @@
 #include <chrono>
 #define profile_time
 #define profile_time_update_breakdown
+#define profile_time_dist_breakdown
 
 namespace odgi {
     namespace algorithms {
@@ -181,11 +182,17 @@ namespace odgi {
                             auto total_duration_sgd = std::chrono::duration<double>::zero(); // total time on SGD: in seconds
 #endif 
 #ifdef profile_time_update_breakdown
-                            // detailed analysis on different parts of Update
+                            // detailed analysis on different parts of Updating Coordinates Part
                             auto total_duration_compute_first = std::chrono::duration<double>::zero();
                             auto total_duration_load = std::chrono::duration<double>::zero();
                             auto total_duration_compute_second = std::chrono::duration<double>::zero();
                             auto total_duration_store = std::chrono::duration<double>::zero();
+#endif
+#ifdef profile_time_dist_breakdown
+                            // detailed analysis on different parts of Getting Distance Part
+                            auto total_duration_one_step_gen = std::chrono::duration<double>::zero();
+                            auto total_duration_two_step_gen = std::chrono::duration<double>::zero();
+                            auto total_duration_get_distance = std::chrono::duration<double>::zero();                        
 #endif
 #ifdef profile_time
                             std::chrono::high_resolution_clock::time_point start_dist;
@@ -194,14 +201,18 @@ namespace odgi {
                             std::chrono::high_resolution_clock::time_point end_sgd;
 #endif
 #ifdef profile_time_update_breakdown
-                            // detailed analysis on Update part
+                            // detailed analysis on Updating Coordinates part
                             std::chrono::high_resolution_clock::time_point before_load;
                             std::chrono::high_resolution_clock::time_point after_load;
                             std::chrono::high_resolution_clock::time_point before_store;
                             std::chrono::high_resolution_clock::time_point after_store;
 #endif
+#ifdef profile_time_dist_breakdown
+                            // detailed analysis on Getting Distance part
+                            std::chrono::high_resolution_clock::time_point one_step_gen;
+                            std::chrono::high_resolution_clock::time_point two_step_gen;
+#endif
                    
-
                             // everyone tries to seed with their own random data
                             const std::uint64_t seed = 9399220 + tid;
                             XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
@@ -246,6 +257,12 @@ namespace odgi {
                                     std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
 #endif
 
+#ifdef profile_time_dist_breakdown
+                                    // After generating 1st step: step_a
+                                    one_step_gen = std::chrono::high_resolution_clock::now();
+                                    total_duration_one_step_gen += std::chrono::duration_cast<std::chrono::nanoseconds>(one_step_gen - start_dist);                                    
+#endif
+
                                     if (cooling.load() || flip(gen)) {
                                         if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
                                             // go backward
@@ -280,7 +297,11 @@ namespace odgi {
                                         as_integers(step_b)[0] = as_integer(path);
                                         as_integers(step_b)[1] = rando(gen);
                                     }
-
+#ifdef profile_time_dist_breakdown
+                                    // After generating two steps: step_a, step_b
+                                    two_step_gen = std::chrono::high_resolution_clock::now();
+                                    total_duration_two_step_gen += std::chrono::duration_cast<std::chrono::nanoseconds>(two_step_gen - one_step_gen);                                    
+#endif
 
                                     // and the graph handles, which we need to record the update
                                     handle_t term_i = path_index.get_handle_of_step(step_a);
@@ -328,11 +349,18 @@ namespace odgi {
                                         term_dist = 1e-9;
                                     }
 
+
 #ifdef profile_time                                    
                                     // 1. Calculate Distance: End. 
                                     end_dist = std::chrono::high_resolution_clock::now();
                                     total_duration_dist += std::chrono::duration_cast<std::chrono::nanoseconds>(end_dist - start_dist);
+#endif
 
+#ifdef profile_time_dist_breakdown
+                                    total_duration_get_distance += std::chrono::duration_cast<std::chrono::nanoseconds>(end_dist - two_step_gen);
+#endif
+
+#ifdef profile_time
                                     // 2. SGD Update: Start.
                                     start_sgd = std::chrono::high_resolution_clock::now();
 #endif
@@ -464,8 +492,35 @@ namespace odgi {
                             std::stringstream msg; 
                             msg << "Thread[" << tid << "]: Dataloading time = " << total_duration_dist.count() << " sec;\t" << "Compute time = " << total_duration_sgd.count() << " sec." << std::endl; 
 #endif
+#ifdef profile_time_dist_breakdown
+                            msg << std::left
+                                << std::setw(40) << "Getting Distance Part Breakdown: " << std::endl
+                                << std::setw(20) << "[0] One Step Gen: " 
+                                << std::setw(10) << total_duration_one_step_gen.count() 
+                                << std::setw(10)  << " sec;" 
+                                << std::setw(20) << "[1] Two Steps Gen: " 
+                                << std::setw(10) << total_duration_two_step_gen.count() 
+                                << std::setw(10)  << " sec;" 
+                                << std::setw(20) << "[2] Get Distance: " 
+                                << std::setw(10) << total_duration_get_distance.count() 
+                                << std::setw(10) << " sec." 
+                                << std::endl;
+#endif
 #ifdef profile_time_update_breakdown
-                            msg << "Computation Part Breakdown: [0]: " << total_duration_compute_first.count() << " sec;\t[1]: " << total_duration_load.count() << " sec;\t[2]: " << total_duration_compute_second.count() << " sec;\t[3]: " << total_duration_store.count() << " sec." << std::endl;
+                            msg << std::setw(40) << "Updating Coordinate Part Breakdown: " << std::endl
+                            << std::setw(20) << "[0] First Compute: " 
+                            << std::setw(10) << total_duration_compute_first.count() 
+                            << std::setw(10)  << " sec;"
+                            << std::setw(20) << "[1] Load Pos: " 
+                            << std::setw(10) << total_duration_load.count() 
+                            << std::setw(10)  << " sec;"
+                            << std::setw(20) << "[2] Second Compute: " 
+                            << std::setw(10) << total_duration_compute_second.count() 
+                            << std::setw(10)  << " sec;" 
+                            << std::setw(20) << "[3] Update Pos: " 
+                            << std::setw(10) << total_duration_store.count() 
+                            << std::setw(10)  << " sec." 
+                            << std::endl << std::endl;
 #endif
 #ifdef profile_time
                             std::cerr << msg.str();
