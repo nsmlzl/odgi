@@ -169,6 +169,7 @@ namespace python_extension {
         // NOTE: this->_space not critical; only a variable
 
 
+        // NOTE: Does not matter too much for large batches (maybe 10-20*10^-5)
         #pragma omp parallel num_threads(nthreads)
         {
             int tid = omp_get_thread_num();
@@ -178,117 +179,141 @@ namespace python_extension {
         }
         this->_counter++;
 
-        #pragma omp parallel for num_threads(nthreads)
-        for (int idx = 0; idx < batch_size; idx++) {
+        /*
+        #pragma omp parallel num_threads(nthreads)
+        {
+            for (int i = 0; i < (batch_size+1) / nthreads; i++) {
+                // TODO: WHY SUCH A LOW PARALLELISATION / SPEEDUP?
+                int cnt = 0;
+                while (cnt < 1000) {
+                    cnt++;
+                }
+            }
+        }
+        */
+
+        //#pragma omp parallel for num_threads(nthreads)
+        //for (int idx = 0; idx < batch_size; idx++) {
+        #pragma omp parallel num_threads(nthreads)
+        {
             int tid = omp_get_thread_num();
             std::uniform_int_distribution<uint64_t> &dis_step = dis_step_v[tid];
             std::uniform_int_distribution<uint64_t> &flip = flip_v[tid];
             XoshiroCpp::Xoshiro256Plus &rng_gen = rng_gen_v[tid];
 
 
+            // TODO: move all in for loop
+            const int64_t steps_per_thread = (batch_size + 1) / nthreads;
+            const int64_t start_idx = tid * steps_per_thread;
+            int64_t end_idx = start_idx + steps_per_thread;
+            if (end_idx > batch_size) {
+                end_idx = batch_size;
+            }
+            for (int idx = start_idx; idx < end_idx; idx++) {
+                // generate random nodes similar to worker thread in path_sgd_layout.cpp
+                uint64_t step_idx = dis_step(rng_gen);
 
-            // generate random nodes similar to worker thread in path_sgd_layout.cpp
-            uint64_t step_idx = dis_step(rng_gen);
+                uint64_t path_idx = npi_iv[step_idx];
+                handlegraph::path_handle_t path = handlegraph::as_path_handle(path_idx);
+                uint64_t path_step_count = this->_path_index.get_path_step_count(path);
 
-            uint64_t path_idx = npi_iv[step_idx];
-            handlegraph::path_handle_t path = handlegraph::as_path_handle(path_idx);
-            uint64_t path_step_count = this->_path_index.get_path_step_count(path);
+                uint64_t s_rank0 = nr_iv[step_idx] - 1;
+                uint64_t s_rank1 = 0;
 
-            uint64_t s_rank0 = nr_iv[step_idx] - 1;
-            uint64_t s_rank1 = 0;
-
-            if (cooling || flip(rng_gen)) {
-                if (s_rank0 > 0 && flip(rng_gen) || s_rank0 == path_step_count-1) {
-                    // go backward
-                    uint64_t jump_space = std::min(this->_space, s_rank0);
-                    uint64_t space = jump_space;
-                    if (jump_space > this->_space_max){
-                        space = this->_space_max + (jump_space - this->_space_max) / this->_space_quantization_step + 1;
+                // NOTE: for BS=100k, single threaded: first around 200*10^-5 faster
+                if (cooling || flip(rng_gen)) {
+                    if (s_rank0 > 0 && flip(rng_gen) || s_rank0 == path_step_count-1) {
+                        // go backward
+                        uint64_t jump_space = std::min(this->_space, s_rank0);
+                        uint64_t space = jump_space;
+                        if (jump_space > this->_space_max){
+                            space = this->_space_max + (jump_space - this->_space_max) / this->_space_quantization_step + 1;
+                        }
+                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, this->_theta, this->_zetas[space]);
+                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                        uint64_t z_i = z(rng_gen);
+                        s_rank1 = s_rank0 - z_i;
+                    } else {
+                        // go forward
+                        uint64_t jump_space = std::min(this->_space, path_step_count - s_rank0 - 1);
+                        uint64_t space = jump_space;
+                        if (jump_space > this->_space_max){
+                            space = this->_space_max + (jump_space - this->_space_max) / this->_space_quantization_step + 1;
+                        }
+                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, this->_theta, this->_zetas[space]);
+                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                        uint64_t z_i = z(rng_gen);
+                        s_rank1 = s_rank0 + z_i;
                     }
-                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, this->_theta, this->_zetas[space]);
-                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
-                    uint64_t z_i = z(rng_gen);
-                    s_rank1 = s_rank0 - z_i;
                 } else {
-                    // go forward
-                    uint64_t jump_space = std::min(this->_space, path_step_count - s_rank0 - 1);
-                    uint64_t space = jump_space;
-                    if (jump_space > this->_space_max){
-                        space = this->_space_max + (jump_space - this->_space_max) / this->_space_quantization_step + 1;
-                    }
-                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, this->_theta, this->_zetas[space]);
-                    dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
-                    uint64_t z_i = z(rng_gen);
-                    s_rank1 = s_rank0 + z_i;
+                    std::uniform_int_distribution<uint64_t> rando(0, this->_graph.get_step_count(path)-1);
+                    // repeat until s_rank0 & s_rank1 different nodes (in same path)
+                    do {
+                        s_rank1 = rando(rng_gen);
+                    } while (s_rank0 == s_rank1);
                 }
-            } else {
-                std::uniform_int_distribution<uint64_t> rando(0, this->_graph.get_step_count(path)-1);
-                // repeat until s_rank0 & s_rank1 different nodes (in same path)
-                do {
-                    s_rank1 = rando(rng_gen);
-                } while (s_rank0 == s_rank1);
+
+                // sort: s_rank0 < s_rank1
+                if (s_rank0 > s_rank1) {
+                    uint64_t tmp = s_rank0;
+                    s_rank0 = s_rank1;
+                    s_rank1 = tmp;
+                }
+                // assert(s_rank0 < s_rank1);
+
+                handlegraph::step_handle_t step_a, step_b;
+                as_integers(step_a)[0] = path_idx;
+                as_integers(step_a)[1] = s_rank0;
+
+                as_integers(step_b)[0] = path_idx;
+                as_integers(step_b)[1] = s_rank1;
+
+
+                handlegraph::handle_t term_i = this->_path_index.get_handle_of_step(step_a);
+                uint64_t term_i_length = this->_graph.get_length(term_i);
+                uint64_t pos_in_path_a = this->_path_index.get_position_of_step(step_a);
+
+                bool term_i_is_rev = this->_graph.get_is_reverse(term_i);
+                bool use_other_end_a = flip(rng_gen); // 1 == +; 0 == -
+                if (use_other_end_a) {
+                    pos_in_path_a += term_i_length;
+                    // flip back if we were already reversed
+                    use_other_end_a = !term_i_is_rev;
+                } else {
+                    use_other_end_a = term_i_is_rev;
+                }
+                uint64_t id_n0 = this->_graph.get_id(term_i);
+
+
+                handlegraph::handle_t term_j = this->_path_index.get_handle_of_step(step_b);
+                uint64_t term_j_length = this->_graph.get_length(term_j);
+                uint64_t pos_in_path_b = this->_path_index.get_position_of_step(step_b);
+
+                bool term_j_is_rev = this->_graph.get_is_reverse(term_j);
+                bool use_other_end_b = flip(rng_gen); // 1 == +; 0 == -
+                if (use_other_end_b) {
+                    pos_in_path_b += term_j_length;
+                    // flip back if we were already reversed
+                    use_other_end_b = !term_j_is_rev;
+                } else {
+                    use_other_end_b = term_j_is_rev;
+                }
+
+                uint64_t id_n1 = this->_graph.get_id(term_j);
+
+
+                double distance = std::abs(static_cast<double>(pos_in_path_b) - static_cast<double>(pos_in_path_a));
+                if (distance == 0.0) {
+                    distance = 1e-9;
+                }
+
+
+                i[idx] = id_n0;
+                j[idx] = id_n1;
+                vis_i[idx] = use_other_end_a? 1 : 0;
+                vis_j[idx] = use_other_end_b? 1 : 0;
+                d[idx] = distance;
             }
-
-            // sort: s_rank0 < s_rank1
-            if (s_rank0 > s_rank1) {
-                uint64_t tmp = s_rank0;
-                s_rank0 = s_rank1;
-                s_rank1 = tmp;
-            }
-            // assert(s_rank0 < s_rank1);
-
-            handlegraph::step_handle_t step_a, step_b;
-            as_integers(step_a)[0] = path_idx;
-            as_integers(step_a)[1] = s_rank0;
-
-            as_integers(step_b)[0] = path_idx;
-            as_integers(step_b)[1] = s_rank1;
-
-
-            handlegraph::handle_t term_i = this->_path_index.get_handle_of_step(step_a);
-            uint64_t term_i_length = this->_graph.get_length(term_i);
-            uint64_t pos_in_path_a = this->_path_index.get_position_of_step(step_a);
-
-            bool term_i_is_rev = this->_graph.get_is_reverse(term_i);
-            bool use_other_end_a = flip(rng_gen); // 1 == +; 0 == -
-            if (use_other_end_a) {
-                pos_in_path_a += term_i_length;
-                // flip back if we were already reversed
-                use_other_end_a = !term_i_is_rev;
-            } else {
-                use_other_end_a = term_i_is_rev;
-            }
-            uint64_t id_n0 = this->_graph.get_id(term_i);
-
-
-            handlegraph::handle_t term_j = this->_path_index.get_handle_of_step(step_b);
-            uint64_t term_j_length = this->_graph.get_length(term_j);
-            uint64_t pos_in_path_b = this->_path_index.get_position_of_step(step_b);
-
-            bool term_j_is_rev = this->_graph.get_is_reverse(term_j);
-            bool use_other_end_b = flip(rng_gen); // 1 == +; 0 == -
-            if (use_other_end_b) {
-                pos_in_path_b += term_j_length;
-                // flip back if we were already reversed
-                use_other_end_b = !term_j_is_rev;
-            } else {
-                use_other_end_b = term_j_is_rev;
-            }
-
-            uint64_t id_n1 = this->_graph.get_id(term_j);
-
-
-            double distance = std::abs(static_cast<double>(pos_in_path_b) - static_cast<double>(pos_in_path_a));
-            if (distance == 0.0) {
-                distance = 1e-9;
-            }
-
-
-            i[idx] = id_n0;
-            j[idx] = id_n1;
-            vis_i[idx] = use_other_end_a? 1 : 0;
-            vis_j[idx] = use_other_end_b? 1 : 0;
-            d[idx] = distance;
         }
     }
 
