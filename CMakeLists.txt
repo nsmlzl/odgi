@@ -524,6 +524,7 @@ add_library(odgi_objs OBJECT
   ${CMAKE_SOURCE_DIR}/src/subcommand/unitig_main.cpp
   ${CMAKE_SOURCE_DIR}/src/subcommand/viz_main.cpp
   ${CMAKE_SOURCE_DIR}/src/subcommand/paths_main.cpp
+  ${CMAKE_SOURCE_DIR}/src/subcommand/priv_main.cpp
   ${CMAKE_SOURCE_DIR}/src/subcommand/prune_main.cpp
   ${CMAKE_SOURCE_DIR}/src/subcommand/unchop_main.cpp
   ${CMAKE_SOURCE_DIR}/src/subcommand/normalize_main.cpp
@@ -612,6 +613,9 @@ add_library(odgi_objs OBJECT
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_jaccard.cpp
   ${CMAKE_SOURCE_DIR}/src/python_extension/rnd_node_generator.cpp
   ${CMAKE_SOURCE_DIR}/src/python_extension/generate_layout_file.cpp
+  ${CMAKE_SOURCE_DIR}/src/algorithms/path_length.cpp
+  ${CMAKE_SOURCE_DIR}/src/algorithms/path_keep.cpp
+  ${CMAKE_SOURCE_DIR}/src/algorithms/diffpriv.cpp
   ${lodepng_SOURCES}
   ${handlegraph_sources}
 )
@@ -791,7 +795,9 @@ set(odgi_HEADERS
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_jaccard.hpp
   ${CMAKE_SOURCE_DIR}/src/python_extension/rnd_node_generator.h
   ${CMAKE_SOURCE_DIR}/src/python_extension/generate_layout_file.h
-)
+  ${CMAKE_SOURCE_DIR}/src/algorithms/path_length.hpp
+  ${CMAKE_SOURCE_DIR}/src/algorithms/path_keep.hpp
+  ${CMAKE_SOURCE_DIR}/src/algorithms/diffpriv.cpp)
 
 target_include_directories(odgi_objs PUBLIC ${odgi_INCLUDES})
 
