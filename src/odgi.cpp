@@ -69,6 +69,13 @@ size_t graph_t::get_length(const handle_t& handle) const {
     return l;
 }
 
+/// Get the length of a node without locking
+size_t graph_t::get_length_no_locking(const handle_t& handle) const {
+    auto& node = get_node_ref(handle);
+    auto l = node.sequence_size();
+    return l;
+}
+
 /// Get the sequence of a node, presented in the handle's local forward orientation.
 std::string graph_t::get_sequence(const handle_t& handle) const {
     auto& node = get_node_ref(handle);

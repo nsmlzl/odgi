@@ -141,8 +141,7 @@ namespace python_extension {
                     }
                 } else {
                     // sample randomly across the path
-                    this->_graph.get_step_count(path);
-                    std::uniform_int_distribution<uint64_t> rando(0, this->_graph.get_step_count(path)-1);
+                    std::uniform_int_distribution<uint64_t> rando(0, path_step_count-1);
                     as_integers(step_b)[0] = as_integer(path);
                     as_integers(step_b)[1] = rando(gen);
                 }
@@ -151,12 +150,9 @@ namespace python_extension {
                 // and the graph handles, which we need to record the update
                 handlegraph::handle_t term_i = this->_path_index.get_handle_of_step(step_a);
                 handlegraph::handle_t term_j = this->_path_index.get_handle_of_step(step_b);
-                uint64_t term_i_length = this->_graph.get_length(term_i);
-                uint64_t term_j_length = this->_graph.get_length(term_j);
+                uint64_t term_i_length = this->_graph.get_length_no_locking(term_i);
+                uint64_t term_j_length = this->_graph.get_length_no_locking(term_j);
 
-                // NOTE: significant difference
-                // TODO use instead?
-                // uint64_t i = number_bool_packing::unpack_number(term_i);
                 uint64_t id_n0 = this->_graph.get_id(term_i);
                 uint64_t id_n1 = this->_graph.get_id(term_j);
 

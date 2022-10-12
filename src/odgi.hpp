@@ -81,6 +81,9 @@ public:
     /// Get the length of a node
     size_t get_length(const handle_t& handle) const;
 
+    /// Get the length of a node without locking
+    size_t get_length_no_locking(const handle_t& handle) const;
+
     /// Get the sequence of a node, presented in the handle's local forward orientation.
     std::string get_sequence(const handle_t& handle) const;
 
