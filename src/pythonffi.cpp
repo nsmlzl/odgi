@@ -105,24 +105,18 @@ PYBIND11_MODULE(odgi_ffi, m)
           });
     m.def("odgi_get_random_node_numpy_batch",
           [](oRndNodeGenerator RNoG, int batch_size, bool cooling, int nthreads) {
-              int64_t *i = new int64_t[batch_size];
-              int64_t *j = new int64_t[batch_size];
               int64_t *vis_i = new int64_t[batch_size];
               int64_t *vis_j = new int64_t[batch_size];
               double *d = new double[batch_size];
 
-              RNoG->get_random_node_batch(batch_size, i, j, vis_i, vis_j, d, cooling, nthreads);
+              RNoG->get_random_node_batch(batch_size, vis_i, vis_j, d, cooling, nthreads);
 
-              py::array_t<int64_t> i_np = py::array_t<int64_t>(batch_size, i);
-              py::array_t<int64_t> j_np = py::array_t<int64_t>(batch_size, j);
               py::array_t<int64_t> vis_i_np = py::array_t<int64_t>(batch_size, vis_i);
               py::array_t<int64_t> vis_j_np = py::array_t<int64_t>(batch_size, vis_j);
               py::array_t<double> d_np = py::array_t<double>(batch_size, d);
 
-              py::tuple ret_tuple = py::make_tuple(i_np, j_np, vis_i_np, vis_j_np, d_np);
+              py::tuple ret_tuple = py::make_tuple(vis_i_np, vis_j_np, d_np);
 
-              delete i;
-              delete j;
               delete vis_i;
               delete vis_j;
               delete d;
