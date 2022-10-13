@@ -96,7 +96,10 @@ namespace python_extension {
             std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
             std::uniform_int_distribution<uint64_t> flip(0, 1);
 
-            for (int idx = tid; idx < batch_size; idx += nthreads) {
+            int steps_per_thread = batch_size / nthreads + 1;
+            int start_idx = tid * steps_per_thread;
+            int end_idx = (start_idx+steps_per_thread <= batch_size)? start_idx + steps_per_thread : batch_size;
+            for (int idx = start_idx; idx < end_idx; idx++) {
                 // sample the first node from all the nodes in the graph
                 // pick a random position from all paths
                 uint64_t step_index = dis_step(gen);
