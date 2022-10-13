@@ -105,21 +105,21 @@ PYBIND11_MODULE(odgi_ffi, m)
           });
     m.def("odgi_get_random_node_numpy_batch",
           [](oRndNodeGenerator RNoG, int batch_size, bool cooling, int nthreads) {
-              int64_t *vis_i = new int64_t[batch_size];
-              int64_t *vis_j = new int64_t[batch_size];
-              double *d = new double[batch_size];
+              py::array_t<int64_t> vis_i_np = py::array_t<int64_t>(batch_size);
+              py::array_t<int64_t> vis_j_np = py::array_t<int64_t>(batch_size);
+              py::array_t<double> d_np = py::array_t<double>(batch_size);
+
+              py::buffer_info buf_vis_i = vis_i_np.request();
+              py::buffer_info buf_vis_j = vis_j_np.request();
+              py::buffer_info buf_d = d_np.request();
+
+              int64_t *vis_i = static_cast<int64_t *>(buf_vis_i.ptr);
+              int64_t *vis_j = static_cast<int64_t *>(buf_vis_j.ptr);
+              double *d = static_cast<double *>(buf_d.ptr);
 
               RNoG->get_random_node_batch(batch_size, vis_i, vis_j, d, cooling, nthreads);
 
-              py::array_t<int64_t> vis_i_np = py::array_t<int64_t>(batch_size, vis_i);
-              py::array_t<int64_t> vis_j_np = py::array_t<int64_t>(batch_size, vis_j);
-              py::array_t<double> d_np = py::array_t<double>(batch_size, d);
-
               py::tuple ret_tuple = py::make_tuple(vis_i_np, vis_j_np, d_np);
-
-              delete vis_i;
-              delete vis_j;
-              delete d;
 
               return ret_tuple;
           },
