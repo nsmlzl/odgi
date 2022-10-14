@@ -64,30 +64,12 @@ namespace python_extension {
         const uint64_t space_quantization_step = this->_space_quantization_step;
         const double theta = this->_theta;
 
-        std::vector<double> zetas = std::vector<double>((space <= space_max ? space : space_max + (space - space_max) / space_quantization_step + 1)+1);
-        uint64_t last_quantized_i = 0;
-        #pragma omp parallel for num_threads(nthreads)
-        for (uint64_t i = 1; i < space+1; ++i) {
-            uint64_t quantized_i = i;
-            uint64_t compressed_space = i;
-            if (i > space_max){
-                quantized_i = space_max + (i - space_max) / space_quantization_step + 1;
-                compressed_space = space_max + ((i - space_max) / space_quantization_step) * space_quantization_step;
-            }
-
-            if (quantized_i != last_quantized_i){
-                dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, compressed_space, theta);
-                zetas[quantized_i] = z_p.zeta();
-                last_quantized_i = quantized_i;
-            }
-        }
-
         #pragma omp parallel num_threads(nthreads)
         {
             int tid = omp_get_thread_num();
             // everyone tries to seed with their own random data
             const std::uint64_t local_seed = this->seed++;
-            XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
+            XoshiroCpp::Xoshiro256Plus gen(local_seed); // a nice, fast PRNG
             // some references to literal bitvectors in the path index hmmm
             const sdsl::bit_vector &np_bv = this->_path_index.get_np_bv();
             const sdsl::int_vector<> &nr_iv = this->_path_index.get_nr_iv();
@@ -122,7 +104,7 @@ namespace python_extension {
                         if (jump_space > space_max){
                             space = space_max + (jump_space - space_max) / space_quantization_step + 1;
                         }
-                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
+                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, this->_zetas[space]);
                         dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
                         uint64_t z_i = z(gen);
                         //assert(z_i <= path_space);
@@ -135,7 +117,7 @@ namespace python_extension {
                         if (jump_space > space_max){
                             space = space_max + (jump_space - space_max) / space_quantization_step + 1;
                         }
-                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
+                        dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, this->_zetas[space]);
                         dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
                         uint64_t z_i = z(gen);
                         //assert(z_i <= path_space);
