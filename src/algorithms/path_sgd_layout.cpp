@@ -1,5 +1,8 @@
 #include "path_sgd_layout.hpp"
 #include "algorithms/layout.hpp"
+#include <tuple>
+// #define debug_sample_from_nodes
+// #define increase_compute
 
 namespace odgi {
     namespace algorithms {
@@ -209,6 +212,9 @@ namespace odgi {
                                     std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
 #endif
 
+#ifdef increase_compute
+                                    step_handle_t step_c, step_d; // get 4 nodes in one step. 
+#endif
                                     if (cooling.load() || flip(gen)) {
                                         if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
                                             // go backward
@@ -223,6 +229,20 @@ namespace odgi {
                                             //assert(z_i <= path_space);
                                             as_integers(step_b)[0] = as_integer(path);
                                             as_integers(step_b)[1] = s_rank - z_i;
+
+#ifdef increase_compute
+                                            std::cerr << "z_i: " << z_i << std::endl;
+                                            // Choose more nodes from the same path in each "step"
+                                            z_i = z(gen);
+                                            std::cerr << "another z_i: " << z_i << std::endl; // need to be different with previous z_i? Could be the same. 
+                                            as_integers(step_c)[0] = as_integer(path);
+                                            as_integers(step_c)[1] = s_rank - z_i;
+
+                                            z_i = z(gen);
+                                            as_integers(step_d)[0] = as_integer(path);
+                                            as_integers(step_d)[1] = s_rank - z_i;
+#endif                                       
+
                                         } else {
                                             // go forward
                                             uint64_t jump_space = std::min(space, path_step_count - s_rank - 1);
@@ -236,44 +256,115 @@ namespace odgi {
                                             //assert(z_i <= path_space);
                                             as_integers(step_b)[0] = as_integer(path);
                                             as_integers(step_b)[1] = s_rank + z_i;
+
+#ifdef increase_compute
+                                            std::cerr << "z_i: " << z_i << std::endl;
+                                            // Choose more nodes from the same path in each "step"
+                                            z_i = z(gen);
+                                            std::cerr << "another z_i: " << z_i << std::endl; // need to be different with previous z_i? Could be the same. 
+                                            as_integers(step_c)[0] = as_integer(path);
+                                            as_integers(step_c)[1] = s_rank + z_i;
+                                            
+                                            z_i = z(gen);
+                                            as_integers(step_d)[0] = as_integer(path);
+                                            as_integers(step_d)[1] = s_rank + z_i;
+#endif
+   
                                         }
                                     } else {
                                         // sample randomly across the path
                                         std::uniform_int_distribution<uint64_t> rando(0, graph.get_step_count(path)-1);
                                         as_integers(step_b)[0] = as_integer(path);
                                         as_integers(step_b)[1] = rando(gen);
+#ifdef increase_compute
+                                        std::cerr << "as_integers(step_b)[1]: " << as_integers(step_b)[1] << std::endl;
+                                        // Choose more nodes from the same path in each "step"
+                                        // uint64_t new_rand = rando(gen);
+                                        // std::cerr << "new rand: " << new_rand << std::endl; // need to be different with previous z_i? Could be the same. 
+                                        as_integers(step_c)[0] = as_integer(path);
+                                        as_integers(step_c)[1] = rando(gen);
+
+                                        as_integers(step_d)[0] = as_integer(path);
+                                        as_integers(step_d)[1] = rando(gen);
+#endif
                                     }
 
 
-                                    // and the graph handles, which we need to record the update
-                                    handle_t term_i = path_index.get_handle_of_step(step_a);
-                                    handle_t term_j = path_index.get_handle_of_step(step_b);
-                                    uint64_t term_i_length = graph.get_length(term_i);
-                                    uint64_t term_j_length = graph.get_length(term_j);
+                                    auto [pos_in_path_a, coord_idx_a] = get_pos_in_path_and_coord_idx(graph,
+                                                                                                      path_index, 
+                                                                                                      flip,
+                                                                                                      gen,
+                                                                                                      step_a);
 
-                                    // adjust the positions to the node starts
-                                    size_t pos_in_path_a = path_index.get_position_of_step(step_a);
-                                    size_t pos_in_path_b = path_index.get_position_of_step(step_b);
+                                    auto [pos_in_path_b, coord_idx_b] = get_pos_in_path_and_coord_idx(graph,
+                                                                                                      path_index, 
+                                                                                                      flip,
+                                                                                                      gen,
+                                                                                                      step_b);
 
-                                    // determine which end we're working with for each node
-                                    bool term_i_is_rev = graph.get_is_reverse(term_i);
-                                    bool use_other_end_a = flip(gen); // 1 == +; 0 == -
-                                    if (use_other_end_a) {
-                                        pos_in_path_a += term_i_length;
-                                        // flip back if we were already reversed
-                                        use_other_end_a = !term_i_is_rev;
-                                    } else {
-                                        use_other_end_a = term_i_is_rev;
-                                    }
-                                    bool term_j_is_rev = graph.get_is_reverse(term_j);
-                                    bool use_other_end_b = flip(gen); // 1 == +; 0 == -
-                                    if (use_other_end_b) {
-                                        pos_in_path_b += term_j_length;
-                                        // flip back if we were already reversed
-                                        use_other_end_b = !term_j_is_rev;
-                                    } else {
-                                        use_other_end_b = term_j_is_rev;
-                                    }
+
+                                    // // and the graph handles, which we need to record the update
+                                    // handle_t term_a = path_index.get_handle_of_step(step_a);
+                                    // handle_t term_b = path_index.get_handle_of_step(step_b);
+                                    // uint64_t term_a_length = graph.get_length(term_a);
+                                    // uint64_t term_b_length = graph.get_length(term_b);
+
+                                    // // adjust the positions to the node starts
+                                    // size_t pos_in_path_a = path_index.get_position_of_step(step_a);
+                                    // size_t pos_in_path_b = path_index.get_position_of_step(step_b);
+
+                                    // // determine which end we're working with for each node
+                                    // bool term_a_is_rev = graph.get_is_reverse(term_a);
+                                    // bool use_other_end_a = flip(gen); // 1 == +; 0 == -
+                                    // if (use_other_end_a) {
+                                    //     pos_in_path_a += term_a_length;
+                                    //     // flip back if we were already reversed
+                                    //     use_other_end_a = !term_a_is_rev;
+                                    // } else {
+                                    //     use_other_end_a = term_a_is_rev;
+                                    // }
+                                    // bool term_b_is_rev = graph.get_is_reverse(term_b);
+                                    // bool use_other_end_b = flip(gen); // 1 == +; 0 == -
+                                    // if (use_other_end_b) {
+                                    //     pos_in_path_b += term_b_length;
+                                    //     // flip back if we were already reversed
+                                    //     use_other_end_b = !term_b_is_rev;
+                                    // } else {
+                                    //     use_other_end_b = term_b_is_rev;
+                                    // }
+
+#ifdef increase_compute
+                                    // step_c, step_d
+                                    // handle_t term_c = path_index.get_handle_of_step(step_c);
+                                    // handle_t term_d = path_index.get_handle_of_step(step_d);
+                                    // uint64_t term_c_length = graph.get_length(term_c);
+                                    // uint64_t term_d_length = graph.get_length(term_d);
+
+                                    // // adjust the positions to the node starts
+                                    // size_t pos_in_path_c = path_index.get_position_of_step(step_c);
+                                    // size_t pos_in_path_d = path_index.get_position_of_step(step_d);
+
+                                    // // determine which end we're working with for each node
+                                    // bool term_c_is_rev = graph.get_is_reverse(term_c);
+                                    // bool use_other_end_c = flip(gen); // 1 == +; 0 == -
+                                    // if (use_other_end_c) {
+                                    //     pos_in_path_c += term_c_length;
+                                    //     // flip back if we were already reversed
+                                    //     use_other_end_c = !term_c_is_rev;
+                                    // } else {
+                                    //     use_other_end_c = term_c_is_rev;
+                                    // }
+                                    // bool term_d_is_rev = graph.get_is_reverse(term_d);
+                                    // bool use_other_end_d = flip(gen); // 1 == +; 0 == -
+                                    // if (use_other_end_d) {
+                                    //     pos_in_path_d += term_d_length;
+                                    //     // flip back if we were already reversed
+                                    //     use_other_end_d = !term_d_is_rev;
+                                    // } else {
+                                    //     use_other_end_d = term_d_is_rev;
+                                    // }                                    
+
+#endif
 
 #ifdef debug_path_sgd
                                     std::cerr << "1. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
@@ -290,6 +381,12 @@ namespace odgi {
                                     if (term_dist == 0) {
                                         term_dist = 1e-9;
                                     }
+                                    
+#ifdef increase_compute
+                                    // TODO: cross-compute over 4 nodes -> we got 6 node pairs. 
+#endif
+
+
 #ifdef eval_path_sgd
                                     std::string path_name = path_index.get_path_name(path);
                                 std::cerr << path_name << "\t" << pos_in_path_a << "\t" << pos_in_path_b << "\t" << term_dist << std::endl;
@@ -311,23 +408,29 @@ namespace odgi {
                                     // actual distance in graph
                                     double d_ij = term_dist;
                                     // identities
-                                    uint64_t i = number_bool_packing::unpack_number(term_i);
-                                    uint64_t j = number_bool_packing::unpack_number(term_j);
+                                    // uint64_t i = number_bool_packing::unpack_number(term_i);
+                                    // uint64_t j = number_bool_packing::unpack_number(term_j);
+#ifdef increase_compute
+                                    // TODO: cross-compute over 4 nodes -> we got 6 node pairs. 
+#endif
+
 #ifdef debug_path_sgd
                                     #pragma omp critical (cerr)
                                 std::cerr << "nodes are " << graph.get_id(term_i) << " and " << graph.get_id(term_j) << std::endl;
 #endif
                                     // distance == magnitude in our 2D situation
-                                    uint64_t offset_i = 0;
-                                    uint64_t offset_j = 0;
-                                    if (use_other_end_a) {
-                                        offset_i += 1;
-                                    }
-                                    if (use_other_end_b) {
-                                        offset_j += 1;
-                                    }
-                                    double dx = X[2 * i + offset_i].load() - X[2 * j + offset_j].load();
-                                    double dy = Y[2 * i + offset_i].load() - Y[2 * j + offset_j].load();
+                                    // uint64_t offset_i = 0;
+                                    // uint64_t offset_j = 0;
+                                    // if (use_other_end_a) {
+                                    //     offset_i += 1;
+                                    // }
+                                    // if (use_other_end_b) {
+                                    //     offset_j += 1;
+                                    // }
+                                    // double dx = X[2 * i + offset_i].load() - X[2 * j + offset_j].load();
+                                    // double dy = Y[2 * i + offset_i].load() - Y[2 * j + offset_j].load();
+                                    double dx = X[coord_idx_a].load() - X[coord_idx_b].load();
+                                    double dy = Y[coord_idx_a].load() - Y[coord_idx_b].load();                                    
                                     if (dx == 0) {
                                         dx = 1e-9; // avoid nan
                                     }
@@ -364,10 +467,15 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "before X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
-                                    X[2 * i + offset_i].store(X[2 * i + offset_i].load() - r_x);
-                                    Y[2 * i + offset_i].store(Y[2 * i + offset_i].load() - r_y);
-                                    X[2 * j + offset_j].store(X[2 * j + offset_j].load() + r_x);
-                                    Y[2 * j + offset_j].store(Y[2 * j + offset_j].load() + r_y);
+                                    // X[2 * i + offset_i].store(X[2 * i + offset_i].load() - r_x);
+                                    // Y[2 * i + offset_i].store(Y[2 * i + offset_i].load() - r_y);
+                                    // X[2 * j + offset_j].store(X[2 * j + offset_j].load() + r_x);
+                                    // Y[2 * j + offset_j].store(Y[2 * j + offset_j].load() + r_y);
+                                    X[coord_idx_a].store(X[coord_idx_a].load() - r_x);
+                                    Y[coord_idx_a].store(Y[coord_idx_a].load() - r_y);
+                                    X[coord_idx_b].store(X[coord_idx_b].load() + r_x);
+                                    Y[coord_idx_b].store(Y[coord_idx_b].load() + r_y);
+
 #ifdef debug_path_sgd
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
@@ -473,6 +581,45 @@ namespace odgi {
 #endif
             return etas;
         }
+
+        // function to get "pos_in_path" and "coord_idx" for a given step
+        // return tuple: (size_t pos_in_path_a, uint64_t coord_index)
+        std::tuple<size_t, uint64_t> get_pos_in_path_and_coord_idx(const PathHandleGraph &graph,
+                                                                   const xp::XP &path_index, 
+                                                                   std::uniform_int_distribution<uint64_t> &flip,
+                                                                   XoshiroCpp::Xoshiro256Plus &gen,
+                                                                   step_handle_t &step) {
+
+            // and the graph handles, which we need to record the update
+            handle_t term = path_index.get_handle_of_step(step);
+            uint64_t term_length = graph.get_length(term);
+
+            // adjust the positions to the node starts
+            size_t pos_in_path = path_index.get_position_of_step(step);
+
+            // determine which end we're working with for each node
+            bool term_is_rev = graph.get_is_reverse(term);
+            bool use_other_end = flip(gen); // 1 == +; 0 == -
+            if (use_other_end) {
+                pos_in_path += term_length;
+                // flip back if we were already reversed
+                use_other_end = !term_is_rev;
+            } else {
+                use_other_end = term_is_rev;
+            }
+            
+            uint64_t i = number_bool_packing::unpack_number(term);
+
+            uint64_t offset = 0;
+            if (use_other_end) {
+                offset += 1;
+            }
+
+            uint64_t idx = 2 * i + offset;
+            return std::make_tuple(pos_in_path, idx);
+        }
+
+
 /*
         void deterministic_path_linear_sgd(const PathHandleGraph &graph,
                                            const xp::XP &path_index,
