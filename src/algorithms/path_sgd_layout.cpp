@@ -2,7 +2,10 @@
 #include "algorithms/layout.hpp"
 #include <tuple>
 // #define debug_sample_from_nodes
-// #define increase_compute
+#define increase_compute
+// #define more_pairs
+#define debug_test
+// #define debug_segfault
 
 namespace odgi {
     namespace algorithms {
@@ -26,7 +29,20 @@ namespace odgi {
                                     const bool &snapshot,
                                     const std::string &snapshot_prefix,
                                     std::vector<std::atomic<double>> &X,
-                                    std::vector<std::atomic<double>> &Y) {
+                                    std::vector<std::atomic<double>> &Y,
+                                    const uint32_t &num_nodes_per_step,
+                                    const bool &all_node_combinations) {
+
+            std::cerr << "iter_max: " << iter_max << std::endl;
+            std::cerr << "min_term_updates: " << min_term_updates << std::endl;
+
+#ifdef increase_compute            
+            // uint32_t num_nodes_per_step;
+            // num_nodes_per_step = 4;
+            std::cerr << "num_nodes_per_step: " << num_nodes_per_step << std::endl;
+            std::cerr << "all_node_combinations: " << all_node_combinations << std::endl;
+#endif
+
 #ifdef debug_path_sgd
             std::cerr << "iter_max: " << iter_max << std::endl;
             std::cerr << "min_term_updates: " << min_term_updates << std::endl;
@@ -213,7 +229,15 @@ namespace odgi {
 #endif
 
 #ifdef increase_compute
-                                    step_handle_t step_c, step_d; // get 4 nodes in one step. 
+                                    // step_handle vector
+                                    std::vector<step_handle_t> steps_in_path;
+                                    steps_in_path.reserve(num_nodes_per_step);
+                                    steps_in_path.emplace_back(step_a);
+#ifdef debug_segfault
+                                    std::cerr << "size of steps_in_path: " << steps_in_path.size() << std::endl;
+#endif
+                                    step_handle_t step_tmp;
+                                    // step_handle_t step_c, step_d; // get 4 nodes in one step. 
 #endif
                                     if (cooling.load() || flip(gen)) {
                                         if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
@@ -231,16 +255,21 @@ namespace odgi {
                                             as_integers(step_b)[1] = s_rank - z_i;
 
 #ifdef increase_compute
-                                            std::cerr << "z_i: " << z_i << std::endl;
-                                            // Choose more nodes from the same path in each "step"
-                                            z_i = z(gen);
-                                            std::cerr << "another z_i: " << z_i << std::endl; // need to be different with previous z_i? Could be the same. 
-                                            as_integers(step_c)[0] = as_integer(path);
-                                            as_integers(step_c)[1] = s_rank - z_i;
+                                            steps_in_path.emplace_back(step_b);
+                                            for (uint64_t i = 2; i < num_nodes_per_step; ++i) {
+                                                // Choose more nodes from the same path in each "step"
+                                                z_i = z(gen);
+                                                as_integers(step_tmp)[0] = as_integer(path);
+                                                as_integers(step_tmp)[1] = s_rank - z_i;
+                                                steps_in_path.emplace_back(step_tmp);
+#ifdef debug_segfault
+                                                std::cerr << "s_rank = " << s_rank << ";\t" << "z_i = " << z_i << ";\t" << "s_rank - z_i = " << as_integers(step_tmp)[1] << std::endl; // need to be different with previous z_i? Could be the same. 
+#endif
+                                            }
 
-                                            z_i = z(gen);
-                                            as_integers(step_d)[0] = as_integer(path);
-                                            as_integers(step_d)[1] = s_rank - z_i;
+                                            // z_i = z(gen);
+                                            // as_integers(step_d)[0] = as_integer(path);
+                                            // as_integers(step_d)[1] = s_rank - z_i;
 #endif                                       
 
                                         } else {
@@ -258,16 +287,28 @@ namespace odgi {
                                             as_integers(step_b)[1] = s_rank + z_i;
 
 #ifdef increase_compute
-                                            std::cerr << "z_i: " << z_i << std::endl;
-                                            // Choose more nodes from the same path in each "step"
-                                            z_i = z(gen);
-                                            std::cerr << "another z_i: " << z_i << std::endl; // need to be different with previous z_i? Could be the same. 
-                                            as_integers(step_c)[0] = as_integer(path);
-                                            as_integers(step_c)[1] = s_rank + z_i;
+                                            steps_in_path.emplace_back(step_b);
+                                            for (uint64_t i = 2; i < num_nodes_per_step; ++i) {
+                                                // Choose more nodes from the same path in each "step"
+                                                z_i = z(gen);
+                                                
+                                                as_integers(step_tmp)[0] = as_integer(path);
+                                                as_integers(step_tmp)[1] = s_rank + z_i;
+                                                steps_in_path.emplace_back(step_tmp);
+#ifdef debug_segfault
+                                                std::cerr << "s_rank = " << s_rank << ";\t" << "z_i = " << z_i << ";\t" << "s_rank - z_i = " << as_integers(step_tmp)[1] << std::endl; // need to be different with previous z_i? Could be the same. 
+#endif                                                
+                                            }
+
+                                            // // Choose more nodes from the same path in each "step"
+                                            // z_i = z(gen);
+                                            // // std::cerr << "another z_i: " << z_i << std::endl; // need to be different with previous z_i? Could be the same. 
+                                            // as_integers(step_c)[0] = as_integer(path);
+                                            // as_integers(step_c)[1] = s_rank + z_i;
                                             
-                                            z_i = z(gen);
-                                            as_integers(step_d)[0] = as_integer(path);
-                                            as_integers(step_d)[1] = s_rank + z_i;
+                                            // z_i = z(gen);
+                                            // as_integers(step_d)[0] = as_integer(path);
+                                            // as_integers(step_d)[1] = s_rank + z_i;
 #endif
    
                                         }
@@ -277,31 +318,84 @@ namespace odgi {
                                         as_integers(step_b)[0] = as_integer(path);
                                         as_integers(step_b)[1] = rando(gen);
 #ifdef increase_compute
-                                        std::cerr << "as_integers(step_b)[1]: " << as_integers(step_b)[1] << std::endl;
-                                        // Choose more nodes from the same path in each "step"
-                                        // uint64_t new_rand = rando(gen);
-                                        // std::cerr << "new rand: " << new_rand << std::endl; // need to be different with previous z_i? Could be the same. 
-                                        as_integers(step_c)[0] = as_integer(path);
-                                        as_integers(step_c)[1] = rando(gen);
 
-                                        as_integers(step_d)[0] = as_integer(path);
-                                        as_integers(step_d)[1] = rando(gen);
+                                        steps_in_path.emplace_back(step_b);
+                                        for (uint64_t i = 2; i < num_nodes_per_step; ++i) {
+                                            // Choose more nodes from the same path in each "step"
+                                            as_integers(step_tmp)[0] = as_integer(path);
+                                            as_integers(step_tmp)[1] = rando(gen);
+                                            steps_in_path.emplace_back(step_tmp);
+#ifdef debug_segfault
+                                            std::cerr << "as_integers(step_tmp)[1] = " << as_integers(step_tmp)[1] << std::endl; // need to be different with previous z_i? Could be the same. 
+#endif                                            
+                                        }
 #endif
                                     }
+#ifdef debug_segfault
+                                    std::cerr << "size of steps_in_path: " << steps_in_path.size() << std::endl;
+#endif
+                                    // vector to store pos_in_path, coord_idx
+                                    std::vector<std::tuple<size_t, uint64_t>> pos_in_path_coord_idx;
+                                    pos_in_path_coord_idx.reserve(num_nodes_per_step);
+#ifdef debug_segfault
+                                    std::cerr << "size of pos_in_path_coord_idx: " << pos_in_path_coord_idx.size() << std::endl;
+#endif
+                                    // pos_in_path_coord_idx.emplace_back(get_pos_in_path_and_coord_idx(graph,
+                                    //                                                                   path_index, 
+                                    //                                                                   flip,
+                                    //                                                                   gen,
+                                    //                                                                   step_a)
+                                    //                                   );
 
+                                    // pos_in_path_coord_idx.emplace_back(get_pos_in_path_and_coord_idx(graph,
+                                    //                                                                   path_index, 
+                                    //                                                                   flip,
+                                    //                                                                   gen,
+                                    //                                                                   step_b)
+                                    //                                   );
 
-                                    auto [pos_in_path_a, coord_idx_a] = get_pos_in_path_and_coord_idx(graph,
-                                                                                                      path_index, 
-                                                                                                      flip,
-                                                                                                      gen,
-                                                                                                      step_a);
+                                    // auto [pos_in_path_a, coord_idx_a] = get_pos_in_path_and_coord_idx(graph,
+                                    //                                                                   path_index, 
+                                    //                                                                   flip,
+                                    //                                                                   gen,
+                                    //                                                                   step_a);
 
-                                    auto [pos_in_path_b, coord_idx_b] = get_pos_in_path_and_coord_idx(graph,
-                                                                                                      path_index, 
-                                                                                                      flip,
-                                                                                                      gen,
-                                                                                                      step_b);
+                                    // auto [pos_in_path_b, coord_idx_b] = get_pos_in_path_and_coord_idx(graph,
+                                    //                                                                   path_index, 
+                                    //                                                                   flip,
+                                    //                                                                   gen,
+                                    //                                                                   step_b);
 
+#ifdef increase_compute
+                                    for (auto& step : steps_in_path) {
+#ifdef debug_segfault
+                                        std::cerr << "as_integers(step)[1]: " << as_integers(step)[1] << std::endl;
+#endif
+                                        pos_in_path_coord_idx.emplace_back(get_pos_in_path_and_coord_idx(graph,
+                                                                                                          path_index, 
+                                                                                                          flip,
+                                                                                                          gen,
+                                                                                                          step)
+                                                                          );
+#ifdef debug_segfault
+                                        std::cerr << "size of pos_in_path_coord_idx: " << pos_in_path_coord_idx.size() << std::endl;
+#endif
+                                    }
+#ifdef debug_segfault
+                                    std::cerr << "size of pos_in_path_coord_idx: " << pos_in_path_coord_idx.size() << std::endl;
+#endif
+                                    // auto [pos_in_path_c, coord_idx_c] = get_pos_in_path_and_coord_idx(graph,
+                                    //                                                                   path_index, 
+                                    //                                                                   flip,
+                                    //                                                                   gen,
+                                    //                                                                   step_c);
+
+                                    // auto [pos_in_path_d, coord_idx_d] = get_pos_in_path_and_coord_idx(graph,
+                                    //                                                                   path_index, 
+                                    //                                                                   flip,
+                                    //                                                                   gen,
+                                    //                                                                   step_d);
+#endif
 
                                     // // and the graph handles, which we need to record the update
                                     // handle_t term_a = path_index.get_handle_of_step(step_a);
@@ -374,6 +468,55 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "2. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
 #endif
+
+#ifdef debug_test
+                                    for (auto it = pos_in_path_coord_idx.begin(); it != pos_in_path_coord_idx.end(); ++it) {
+                                        std::cerr << "pos in path: " << std::get<0>(*it) << " coord idx: " << std::get<1>(*it) << std::endl;
+                                    }
+#endif
+
+                                    if (all_node_combinations) { // True for all node combinations
+                                        for (auto it_a = pos_in_path_coord_idx.begin(); it_a != pos_in_path_coord_idx.end() - 1; ++it_a) {
+                                            for (auto it_b = it_a + 1; it_b != pos_in_path_coord_idx.end(); ++it_b) {
+                                                auto [pos_in_path_a, coord_idx_a] = *it_a;
+                                                auto [pos_in_path_b, coord_idx_b] = *it_b;
+                                                update_pos(pos_in_path_a, pos_in_path_b, coord_idx_a, coord_idx_b, X, Y, eta, Delta_max);
+                                            }
+                                        }
+                                    } else { // false for all node combinations. Still, update N times for 2*N nodes. 
+                                        for (auto it = pos_in_path_coord_idx.begin(); it != pos_in_path_coord_idx.end(); it = it + 2) {
+                                            auto [pos_in_path_a, coord_idx_a] = *it;
+                                            auto [pos_in_path_b, coord_idx_b] = *(it + 1);
+                                            update_pos(pos_in_path_a, pos_in_path_b, coord_idx_a, coord_idx_b, X, Y, eta, Delta_max);
+                                        }
+                                    }
+
+
+
+#ifdef debug_segfault                                        
+                                        std::cerr << "pos in path 0: " << pos_in_path_0 <<"\t" << "pos in path 1: " << pos_in_path_1 << std::endl;
+#endif
+
+
+
+                                    // update_pos(pos_in_path_a, pos_in_path_b, coord_idx_a, coord_idx_b, X, Y, eta, Delta_max);
+
+#ifdef increase_compute
+                                    // update_pos(pos_in_path_c, pos_in_path_d, coord_idx_c, coord_idx_d, X, Y, eta, Delta_max);
+#endif
+
+#ifdef more_pairs
+                                    // a, c
+                                    update_pos(pos_in_path_a, pos_in_path_c, coord_idx_a, coord_idx_c, X, Y, eta, Delta_max);
+                                    // b, d
+                                    update_pos(pos_in_path_b, pos_in_path_d, coord_idx_b, coord_idx_d, X, Y, eta, Delta_max);
+                                    // a, d
+                                    update_pos(pos_in_path_a, pos_in_path_d, coord_idx_a, coord_idx_d, X, Y, eta, Delta_max);
+                                    // b, c
+                                    update_pos(pos_in_path_b, pos_in_path_c, coord_idx_b, coord_idx_c, X, Y, eta, Delta_max);
+#endif
+
+/*
                                     // establish the term distance
                                     double term_dist = std::abs(
                                             static_cast<double>(pos_in_path_a) - static_cast<double>(pos_in_path_b));
@@ -429,6 +572,7 @@ namespace odgi {
                                     // }
                                     // double dx = X[2 * i + offset_i].load() - X[2 * j + offset_j].load();
                                     // double dy = Y[2 * i + offset_i].load() - Y[2 * j + offset_j].load();
+                                    
                                     double dx = X[coord_idx_a].load() - X[coord_idx_b].load();
                                     double dy = Y[coord_idx_a].load() - Y[coord_idx_b].load();                                    
                                     if (dx == 0) {
@@ -475,11 +619,18 @@ namespace odgi {
                                     Y[coord_idx_a].store(Y[coord_idx_a].load() - r_y);
                                     X[coord_idx_b].store(X[coord_idx_b].load() + r_x);
                                     Y[coord_idx_b].store(Y[coord_idx_b].load() + r_y);
+*/
 
 #ifdef debug_path_sgd
                                     std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
 #endif
                                     steps_since_term_updates++;
+
+#ifdef debug_test
+                                    if (steps_since_term_updates > 10) {
+                                        quick_exit(1);
+                                    }
+#endif
                                     if ((steps_since_term_updates % 1000) == 0) {
                                         term_updates += steps_since_term_updates;
                                         steps_since_term_updates = 0;
@@ -619,370 +770,70 @@ namespace odgi {
             return std::make_tuple(pos_in_path, idx);
         }
 
+        // function to update X, Y
+        void update_pos(size_t &pos_in_path_a, 
+                        size_t &pos_in_path_b,
+                        uint64_t &coord_idx_a,
+                        uint64_t &coord_idx_b,
+                        std::vector<std::atomic<double>> &X,
+                        std::vector<std::atomic<double>> &Y, 
+                        std::atomic<double> &eta, 
+                        std::atomic<double> &Delta_max) {
+                            // establish the term distance
+                            double term_dist = std::abs(static_cast<double>(pos_in_path_a) - static_cast<double>(pos_in_path_b));
 
-/*
-        void deterministic_path_linear_sgd(const PathHandleGraph &graph,
-                                           const xp::XP &path_index,
-                                           const std::vector<path_handle_t> &path_sgd_use_paths,
-                                           const uint64_t &iter_max,
-                                           const uint64_t &iter_with_max_learning_rate,
-                                           const uint64_t &min_term_updates,
-                                           const double &delta,
-                                           const double &eps,
-                                           const double &eta_max,
-                                           const double &theta,
-                                           const uint64_t &space,
-                                           const std::string &seeding_string,
-                                           const bool &progress,
-                                           const bool &snapshot,
-                                           std::vector<std::vector<double>> &snapshots,
-                                           std::vector<std::atomic<double>> &X,
-                                           std::vector<std::atomic<double>> &Y) {
-            using namespace std::chrono_literals; // for timing stuff
-            uint64_t num_nodes = graph.get_node_count();
-            // seed them with the graph order
-            uint64_t len = 0;
-            graph.for_each_handle(
-                    [&X, &graph, &len](const handle_t &handle) {
-                        // nb: we assume that the graph provides a compact handle set
-                        X[number_bool_packing::unpack_number(handle)].store(len);
-                        len += graph.get_length(handle);
-                    });
-            // the longest path length measured in nucleotides
-            size_t longest_path_in_nucleotides = 0;
-            // the total path length in nucleotides
-            size_t total_path_len_in_nucleotides = 0;
-            // here we store all path nucleotides lengths so we know later from which path we sampled our random position from
-            IITree<uint64_t, path_handle_t> path_nucleotide_tree;
-            // iterate over all relevant path_handles:
-            //  1. build the interval tree
-            //  2. find out the longest path in nucleotides and store this number size_t
-            //  3. add the current path length to the total length
-            for (auto &path : path_sgd_use_paths) {
-#ifdef debug_path_sgd
-                std::string path_name = graph.get_path_name(path);
-                std::cerr << path_name << std::endl;
-                std::cerr << as_integer(path) << std::endl;
-#endif
-                size_t path_len = path_index.get_path_length(path);
-#ifdef debug_path_sgd
-                std::cerr << path_name << " has length: " << path_len << std::endl;
-#endif
-                path_nucleotide_tree.add(total_path_len_in_nucleotides,
-                                         total_path_len_in_nucleotides + path_len,
-                                         path);
+                            // std::string path_name = path_index.get_path_name(path);
 
-                if (path_len > longest_path_in_nucleotides) {
-                    longest_path_in_nucleotides = path_len;
-                }
-                total_path_len_in_nucleotides += path_len;
-            }
-            path_nucleotide_tree.index();
 
-            double w_min = (double) 1.0 / (double) (eta_max);
-#ifdef debug_path_sgd
-            std::cerr << "w_min " << w_min << std::endl;
+                            if (term_dist == 0) {
+                                term_dist = 1e-9;
+                            }
+#ifdef debug_test
+                            std::cerr << pos_in_path_a << "\t" << pos_in_path_b << "\t" << term_dist << std::endl;
 #endif
-            double w_max = 1.0;
-            // get our schedule
-            std::vector<double> etas = path_linear_sgd_layout_schedule(w_min, w_max, iter_max,
-                                                                       iter_with_max_learning_rate,
-                                                                       eps);
-            // initialize Zipfian distribution so we only have to calculate zeta once
-            dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type p(1, space, theta);
-            dirtyzipf::dirty_zipfian_int_distribution<uint64_t> zipfian(p);
-            // how many term updates we make
-            std::atomic<uint64_t> term_updates;
-            term_updates.store(0);
-            // learning rate
-            std::atomic<double> eta;
-            eta.store(etas.front());
-            // our max delta
-            std::atomic<double> Delta_max;
-            Delta_max.store(0);
-            // seed with the given string
-            std::seed_seq seed(seeding_string.begin(), seeding_string.end());
-            std::mt19937 gen(seed);
-            std::uniform_int_distribution<uint64_t> dis(1, num_nodes);
-            if (sample_from_path_steps) {
-                dis = std::uniform_int_distribution<uint64_t>(0, path_index.get_np_bv().size() - 1);
-            }
-            if (sample_from_paths) {
-                dis = std::uniform_int_distribution<uint64_t>(0, total_path_len_in_nucleotides - 1);
-            }
-            std::uniform_int_distribution<uint64_t> flip(0, 1);
-            const sdsl::bit_vector &np_bv = path_index.get_np_bv();
-            const sdsl::int_vector<> &nr_iv = path_index.get_nr_iv();
-            const sdsl::int_vector<> &npi_iv = path_index.get_npi_iv();
-            auto &np_bv_select = path_index.get_np_bv_select();
-            uint64_t hit_num_paths = 0;
-            step_handle_t s_h;
-            uint64_t node_index;
-            uint64_t next_node_index;
-            for (uint64_t iteration = 0; iteration < iter_max; iteration++) {
-                if (snapshot && iteration < iter_max - 1) {
-                    // drop out of atomic stuff... maybe not the best way to do this
-                    std::vector<double> X_iter(X.size());
-                    uint64_t i = 0;
-                    for (auto &x : X) {
-                        X_iter[i++] = x.load();
-                    }
-                    snapshots.push_back(X_iter);
-                }
-                for (uint64_t term_update = 0; term_update < min_term_updates; term_update++) {
-                    // pick a random position from all paths
-                    uint64_t pos = dis(gen);
-                    size_t pos_in_path_a;
-                    size_t path_len;
-                    path_handle_t path;
-#ifdef debug_path_sgd
-                    std::cerr << "uniform_position: " << pos << std::endl;
-#endif
-                    if (sample_from_paths) {
-                        // use our interval tree to get the path handle and path nucleotide position of the picked position
-                        //std::vector<Interval<size_t, path_handle_t> > result;
-                        //result = path_nucleotide_tree.findOverlapping(pos, pos);
-                        std::vector<size_t> a;
-                        path_nucleotide_tree.overlap(pos, pos + 1, a);
-                        if (a.empty()) {
-                            std::cerr << "[odgi::path_sgd] no overlapping intervals at position " << pos
-                                      << std::endl;
-                            exit(1);
+                            double term_weight = 1.0 / (double) term_dist;
+                            double mu = eta.load() * term_weight;
+                            if (mu > 1) {
+                                mu = 1;
+                            }
+
+                            double dx = X[coord_idx_a].load() - X[coord_idx_b].load();
+                            double dy = Y[coord_idx_a].load() - Y[coord_idx_b].load();                         
+
+                            if (dx == 0) {
+                                dx = 1e-9; // avoid nan
+                            }
+
+                            double mag = sqrt(dx * dx + dy * dy);
+
+                            // check distances for early stopping
+                            double Delta = mu * (mag - term_dist) / 2;
+                            // try until we succeed. risky.
+                            double Delta_abs = std::abs(Delta);
+
+// #ifdef debug_test
+//                             std::cerr << "Delta_abs: " << Delta_abs << std::endl;
+// #endif
+                            // todo use atomic compare and swap
+                            while (Delta_abs > Delta_max.load()) {
+// #ifdef debug_test
+//                                 std::cerr << "before: Delta_max: " << Delta_max.load() << std::endl;
+// #endif
+                                Delta_max.store(Delta_abs);
+// #ifdef debug_test
+//                                 std::cerr << "after: Delta_max: " << Delta_max.load() << std::endl;
+// #endif
+                            }
+                            // calculate update
+                            double r = Delta / mag;
+                            double r_x = r * dx;
+                            double r_y = r * dy;
+
+                            X[coord_idx_a].store(X[coord_idx_a].load() - r_x);
+                            Y[coord_idx_a].store(Y[coord_idx_a].load() - r_y);
+                            X[coord_idx_b].store(X[coord_idx_b].load() + r_x);
+                            Y[coord_idx_b].store(Y[coord_idx_b].load() + r_y);
+                            return;
                         }
-                        auto &p = a[0];
-                        path = path_nucleotide_tree.data(p);
-                        size_t path_start_pos = path_nucleotide_tree.start(p);
-                        // size_t path_end_pos = result[0].stop;
-                        path_len = path_index.get_path_length(path) - 1;
-                        // we have a 0-based positioning in the path index
-                        pos_in_path_a = pos - path_start_pos;
-                    } else {
-                        if (sample_from_path_steps) {
-                            // did we hit a node and not a path?
-                            if (np_bv[pos] == 1) {
-                                continue;
-                            } else {
-                                uint64_t path_i = npi_iv[pos];
-                                path = as_path_handle(path_i);
-                                as_integers(s_h)[0] = path_i; // path index
-                                as_integers(s_h)[1] = nr_iv[pos] - 1; // maybe -1?! // step rank in path
-                                pos_in_path_a = path_index.get_position_of_step(s_h);
-                                path_len = path_index.get_path_length(path) - 1;
-#ifdef debug_sample_from_nodes
-                                std::cerr << "path_len: " << path_len << std::endl;
-                                std::cerr << "path id: " << (npi_iv[pos]) << std::endl;
-                                std::cerr << "step rank in path: " << (nr_iv[pos] - 1) << std::endl;
-                                std::cerr << "pos_in_path_a: " << pos_in_path_a << std::endl;
-#endif
-                            }
-                            // default: sample the first node from all the nodes in the graph
-                        } else {
-                            node_index = np_bv_select(pos);
-                            // did we hit the last node?
-                            if (pos == num_nodes) {
-                                next_node_index = np_bv.size();
-                            } else {
-                                next_node_index = np_bv_select(pos + 1);
-                            }
-                            hit_num_paths = next_node_index - node_index - 1;
-                            if (hit_num_paths == 0) {
-                                continue;
-                            }
-                            std::uniform_int_distribution<uint64_t> dis_path(1, hit_num_paths);
-                            uint64_t path_pos_in_np_iv = dis_path(gen);
-#ifdef debug_sample_from_nodes
-                            std::cerr << "path_pos_in_np_iv first: " << path_pos_in_np_iv << std::endl;
-                            std::cerr << "node_index: " << node_index << std::endl;
-#endif
-                            path_pos_in_np_iv = node_index + path_pos_in_np_iv;
-#ifdef debug_sample_from_nodes
-                            std::cerr << "path pos in np_iv: " << path_pos_in_np_iv << std::endl;
-#endif
-                            uint64_t path_i = npi_iv[path_pos_in_np_iv];
-                            path = as_path_handle(path_i);
-#ifdef debug_sample_from_nodes
-                            std::cerr << "path integer: " << path_i << std::endl;
-#endif
-                            as_integers(s_h)[0] = path_i; // path index
-                            as_integers(s_h)[1] = nr_iv[path_pos_in_np_iv] - 1; // step rank in path
-#ifdef debug_sample_from_nodes
-                            std::cerr << "step rank in path: " << nr_iv[path_pos_in_np_iv]  << std::endl;
-#endif
-                            pos_in_path_a = path_index.get_position_of_step(s_h);
-#ifdef debug_sample_from_nodes
-                            std::cerr << "pos_in_path_a: " << pos_in_path_a << std::endl;
-#endif
-                            path_len = path_index.get_path_length(path) - 1;
-#ifdef debug_sample_from_nodes
-                            std::cerr << "path_len " << path_len << std::endl;
-                            std::cerr << "node count " << num_nodes << std::endl;
-#endif
-                        }
-                    }
-                    uint64_t zipf_int = zipfian(gen);
-#ifdef debug_path_sgd
-                    std::cerr << "random pos: " << pos << std::endl;
-                    std::cerr << "path_start_pos: " << path_start_pos << std::endl;
-                    std::cerr << "pos_in_path_a: " << pos_in_path_a << std::endl;
-                    std::cerr << "path_len: " << path_len << std::endl;
-                    //std::cerr << "zipf: " << zipf_int << std::endl;
-#endif
-                    size_t pos_in_path_b = pos_in_path_a;
-                    if (flip(gen)) {
-                        if (zipf_int > pos_in_path_a) {
-                            if (pos_in_path_a == 0) {
-                                continue;
-                            } else {
-                                zipf_int %= pos_in_path_a;
-                            }
-                        }
-                        pos_in_path_b -= zipf_int;
-                    } else {
-                        if (zipf_int > path_len - pos_in_path_a) {
-                            if (path_len - pos_in_path_a == 0) {
-                                continue;
-                            } else {
-                                zipf_int %= path_len - pos_in_path_a;
-                            }
-                        }
-                        pos_in_path_b += zipf_int;
-                    }
-#ifdef debug_path_sgd
-                    std::cerr << "zipf: " << zipf_int << std::endl;
-                    std::cerr << "pos_in_path_a: " << pos_in_path_a << std::endl;
-                    std::cerr << "pos_in_path_b: " << pos_in_path_b << std::endl;
-#endif
-                    // get the step handles
-                    step_handle_t step_a = path_index.get_step_at_position(path, pos_in_path_a);
-                    step_handle_t step_b = path_index.get_step_at_position(path, pos_in_path_b);
-
-                    // and the graph handles, which we need to record the update
-                    handle_t term_i = path_index.get_handle_of_step(step_a);
-                    handle_t term_j = path_index.get_handle_of_step(step_b);
-
-                    // adjust the positions to the node starts
-                    pos_in_path_a = path_index.get_position_of_step(step_a);
-                    pos_in_path_b = path_index.get_position_of_step(step_b);
-#ifdef debug_path_sgd
-                    std::cerr << "1. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
-#endif
-                    // assert(pos_in_path_a < path_index.get_path_length(path));
-                    // assert(pos_in_path_b < path_index.get_path_length(path));
-
-                    // and adjust to account for our relative orientation
-                    if (graph.get_is_reverse(term_i)) {
-                        pos_in_path_a += graph.get_length(term_i);
-                    }
-                    if (graph.get_is_reverse(term_j)) {
-                        pos_in_path_b += graph.get_length(term_j);
-                    }
-#ifdef debug_path_sgd
-                    std::cerr << "2. pos in path " << pos_in_path_a << " " << pos_in_path_b << std::endl;
-#endif
-                    // establish the term distance
-                    double term_dist = std::abs(
-                            static_cast<double>(pos_in_path_a) - static_cast<double>(pos_in_path_b));
-
-                    if (term_dist == 0) {
-                        continue;
-                        // term_dist = 1e-9;
-                    }
-#ifdef eval_path_sgd
-                    std::string path_name = path_index.get_path_name(path);
-                    std::cerr << path_name << "\t" << pos_in_path_a << "\t" << pos_in_path_b << "\t" << term_dist << std::endl;
-#endif
-                    // assert(term_dist == zipf_int);
-#ifdef debug_path_sgd
-                    std::cerr << "term_dist: " << term_dist << std::endl;
-#endif
-                    double term_weight = 1.0 / term_dist;
-
-                    double w_ij = term_weight;
-#ifdef debug_path_sgd
-                    std::cerr << "w_ij = " << w_ij << std::endl;
-#endif
-                    double mu = eta.load() * w_ij;
-                    if (mu > 1) {
-                        mu = 1;
-                    }
-                    // actual distance in graph
-                    double d_ij = term_dist;
-                    // identities
-                    uint64_t i = number_bool_packing::unpack_number(term_i);
-                    uint64_t j = number_bool_packing::unpack_number(term_j);
-#ifdef debug_path_sgd
-#pragma omp critical (cerr)
-                    std::cerr << "nodes are " << graph.get_id(term_i) << " and " << graph.get_id(term_j) << std::endl;
-#endif
-                    // distance == magnitude in our 1D situation
-                    double dx = X[i].load() - X[j].load();
-                    if (dx == 0) {
-                        dx = 1e-9; // avoid nan
-                    }
-#ifdef debug_path_sgd
-#pragma omp critical (cerr)
-                    std::cerr << "distance is " << dx << " but should be " << d_ij << std::endl;
-#endif
-                    //double mag = dx; //sqrt(dx*dx + dy*dy);
-                    double mag = std::abs(dx);
-#ifdef debug_path_sgd
-                    std::cerr << "mu " << mu << " mag " << mag << " d_ij " << d_ij << std::endl;
-#endif
-                    // check distances for early stopping
-                    double Delta = mu * (mag - d_ij) / 2;
-                    // try until we succeed. risky.
-                    double Delta_abs = std::abs(Delta);
-#ifdef debug_path_sgd
-#pragma omp critical (cerr)
-                    std::cerr << "Delta_abs " << Delta_abs << std::endl;
-#endif
-                    while (Delta_abs > Delta_max.load()) {
-                        Delta_max.store(Delta_abs);
-                    }
-                    // calculate update
-                    double r = Delta / mag;
-                    double r_x = r * dx;
-#ifdef debug_path_sgd
-#pragma omp critical (cerr)
-                    std::cerr << "r_x is " << r_x << std::endl;
-#endif
-                    // update our positions (atomically)
-#ifdef debug_path_sgd
-                    std::cerr << "before X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
-#endif
-                    X[i].store(X[i].load() - r_x);
-                    X[j].store(X[j].load() + r_x);
-#ifdef debug_path_sgd
-                    std::cerr << "after X[i] " << X[i].load() << " X[j] " << X[j].load() << std::endl;
-#endif
-                    term_updates.store(term_updates.load() + 1);
-                }
-                if (Delta_max.load() <= delta) {
-                    if (progress) {
-                        std::cerr << "[odgi::path_linear_sgd_layout] delta_max: " << Delta_max.load() << " <= delta: " << delta
-                                  << ". Threshold reached, therefore ending iterations." << std::endl;
-                    }
-                    break;
-                } else {
-                    if (progress) {
-                        double percent_progress = ((double) (iteration + 1) / (double) iter_max) * 100.0;
-                        std::cerr << std::fixed << std::setprecision(2) << "[odgi::path_linear_sgd_layout]: " << percent_progress
-                                  << "% progress: "
-                                     "iteration: " << (iteration + 1) <<
-                                  ", eta: " << eta.load() <<
-                                  ", delta: " << Delta_max.load() <<
-                                  ", number of updates: " << term_updates.load() << std::endl;
-                    }
-
-                    // If it is the last iteration, there is no need to update the next values, and it is avoided
-                    // to request an element outside the vector
-                    if (iteration + 1 < iter_max) {
-                        eta.store(etas[iteration + 1]); // update our learning rate
-                        Delta_max.store(delta); // set our delta max to the threshold
-                    }
-                }
-                term_updates.store(0);
-            }
-        }*/
     }
 }

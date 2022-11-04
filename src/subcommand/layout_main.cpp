@@ -81,6 +81,16 @@ int main_layout(int argc, char **argv) {
     args::ValueFlag<std::string> p_sgd_snapshot(pg_sgd_opts, "STRING",
                                                 "Set the prefix to which each snapshot layout of a path guided 2D SGD iteration should be written to (default: NONE).",
                                                 {'u', "path-sgd-snapshot"});
+    
+    // [Jiajie] Add options for increasing data reuse
+    args::Group increase_data_reuse_opts(parser, "[ Increase Data Reuse Testing Options ]");
+    args::ValueFlag<uint32_t> p_num_nodes_per_step(increase_data_reuse_opts, "N",
+                                                   "Number of nodes to be selected in each step of the path guided 2D SGD (default: 2).",
+                                                   {'n', "path-sgd-num-nodes-per-step"});
+    args::ValueFlag<bool> p_all_node_combinations(increase_data_reuse_opts, "N",
+                                                  "Whether to use all node combinations in each step of the path guided 2D SGD (default: false).",
+                                                  {'c', "path-sgd-all-node-combinations"});    
+    
     args::Group threading_opts(parser, "[ Threading ]");
     args::ValueFlag<uint64_t> nthreads(threading_opts, "N",
                                        "Number of threads to use for parallel operations.",
@@ -325,6 +335,10 @@ int main_layout(int argc, char **argv) {
           //std::cerr << pos << ": " << graph_X[pos] << "," << graph_Y[pos] << " ------ " << graph_X[pos + 1] << "," << graph_Y[pos + 1] << std::endl;
       });
 
+    // [Jiajie] parametetrize the num_nodes_per_step
+    uint32_t num_nodes_per_step = args::get(p_num_nodes_per_step) ? args::get(p_num_nodes_per_step) : 2; // default: 2
+    bool all_node_combinations = args::get(p_all_node_combinations) ? args::get(p_all_node_combinations) : false; // default: false
+
     //double max_x = 0;
     algorithms::path_linear_sgd_layout(
         graph,
@@ -346,7 +360,9 @@ int main_layout(int argc, char **argv) {
         snapshot,
         snapshot_prefix,
         graph_X,
-        graph_Y
+        graph_Y,
+        num_nodes_per_step, 
+        all_node_combinations
         );
 
     // drop out of atomic stuff... maybe not the best way to do this

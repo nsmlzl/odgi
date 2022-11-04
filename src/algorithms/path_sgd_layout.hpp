@@ -45,7 +45,9 @@ namespace odgi {
                                     const bool &snapshot,
                                     const std::string &snapshot_prefix,
                                     std::vector<std::atomic<double>> &X,
-                                    std::vector<std::atomic<double>> &Y);
+                                    std::vector<std::atomic<double>> &Y,
+                                    const uint32_t &num_nodes_per_step, 
+                                    const bool &all_node_combinations);
 
 /// our learning schedule
         std::vector<double> path_linear_sgd_layout_schedule(const double &w_min,
@@ -60,6 +62,15 @@ namespace odgi {
                                                                    std::uniform_int_distribution<uint64_t> &flip,
                                                                    XoshiroCpp::Xoshiro256Plus &gen,
                                                                    step_handle_t &step);
+/// function to update coordinates X, Y; given a pair of nodes
+        void update_pos(size_t &pos_in_path_a, 
+                        size_t &pos_in_path_b,
+                        uint64_t &coord_idx_a,
+                        uint64_t &coord_idx_b,
+                        std::vector<std::atomic<double>> &X,
+                        std::vector<std::atomic<double>> &Y, 
+                        std::atomic<double> &eta, 
+                        std::atomic<double> &Delta_max);
 
 
 /// single threaded and deterministic path guided 1D linear SGD
