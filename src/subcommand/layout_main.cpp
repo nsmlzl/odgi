@@ -10,6 +10,7 @@
 #include "algorithms/layout.hpp"
 #include "hilbert.hpp"
 #include "utils.hpp"
+#include <chrono>
 
 namespace odgi {
 
@@ -131,6 +132,10 @@ int main_layout(int argc, char **argv) {
 
 	const uint64_t num_threads = nthreads ? args::get(nthreads) : 1;
 
+    // [Jiajie] measure the time of graph loading (deserialization)
+    auto time_graph_deserial = std::chrono::duration<double>::zero();
+    auto start_time_graph_deserial = std::chrono::high_resolution_clock::now();
+
 	graph_t graph;
     assert(argc > 0);
     if (!args::get(dg_in_file).empty()) {
@@ -141,6 +146,10 @@ int main_layout(int argc, char **argv) {
 			utils::handle_gfa_odgi_input(infile, "layout", args::get(progress), num_threads, graph);
         }
     }
+
+    auto end_time_graph_deserial = std::chrono::high_resolution_clock::now();
+    time_graph_deserial = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_graph_deserial - start_time_graph_deserial);
+    std::cerr << "[odgi::layout] time to load the graph (deserialize .og file): " << time_graph_deserial.count() << " sec" << std::endl;
 
     if (tmp_base) {
         xp::temp_file::set_dir(args::get(tmp_base));
