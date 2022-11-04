@@ -4,7 +4,7 @@
 // #define debug_sample_from_nodes
 #define increase_compute
 // #define more_pairs
-#define debug_test
+// #define debug_test
 // #define debug_segfault
 
 namespace odgi {
