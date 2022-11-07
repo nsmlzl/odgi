@@ -351,7 +351,7 @@ int main_layout(int argc, char **argv) {
     // [Jiajie] end_time for counting the time spent before calling path_linear_sgd_layout function
     auto end_time_preprocess = std::chrono::high_resolution_clock::now();
     time_preprocess = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_preprocess - start_time_preprocess);
-    std::cerr << "[odgi::layout] time to load the graph (deserialize .og file): " << time_preprocess.count() << " sec" << std::endl;
+    std::cerr << "[odgi::layout] time for preprocessing (before calling path_linear_sgd_layout function): " << time_preprocess.count() << " sec" << std::endl;
 
     //double max_x = 0;
     algorithms::path_linear_sgd_layout(
