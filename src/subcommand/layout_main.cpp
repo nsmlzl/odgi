@@ -132,9 +132,9 @@ int main_layout(int argc, char **argv) {
 
 	const uint64_t num_threads = nthreads ? args::get(nthreads) : 1;
 
-    // [Jiajie] measure the time of graph loading (deserialization)
-    auto time_graph_deserial = std::chrono::duration<double>::zero();
-    auto start_time_graph_deserial = std::chrono::high_resolution_clock::now();
+    // [Jiajie] measure the time spent before calling path_linear_sgd_layout function
+    auto time_preprocess = std::chrono::duration<double>::zero();
+    auto start_time_preprocess = std::chrono::high_resolution_clock::now();
 
 	graph_t graph;
     assert(argc > 0);
@@ -147,9 +147,9 @@ int main_layout(int argc, char **argv) {
         }
     }
 
-    auto end_time_graph_deserial = std::chrono::high_resolution_clock::now();
-    time_graph_deserial = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_graph_deserial - start_time_graph_deserial);
-    std::cerr << "[odgi::layout] time to load the graph (deserialize .og file): " << time_graph_deserial.count() << " sec" << std::endl;
+    // auto end_time_graph_deserial = std::chrono::high_resolution_clock::now();
+    // time_graph_deserial = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_graph_deserial - start_time_graph_deserial);
+    // std::cerr << "[odgi::layout] time to load the graph (deserialize .og file): " << time_graph_deserial.count() << " sec" << std::endl;
 
     if (tmp_base) {
         xp::temp_file::set_dir(args::get(tmp_base));
@@ -347,6 +347,11 @@ int main_layout(int argc, char **argv) {
     // [Jiajie] parametetrize the num_nodes_per_step
     uint32_t num_nodes_per_step = args::get(p_num_nodes_per_step) ? args::get(p_num_nodes_per_step) : 2; // default: 2
     bool all_node_combinations = args::get(p_all_node_combinations) ? args::get(p_all_node_combinations) : false; // default: false
+
+    // [Jiajie] end_time for counting the time spent before calling path_linear_sgd_layout function
+    auto end_time_preprocess = std::chrono::high_resolution_clock::now();
+    time_preprocess = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_preprocess - start_time_preprocess);
+    std::cerr << "[odgi::layout] time to load the graph (deserialize .og file): " << time_preprocess.count() << " sec" << std::endl;
 
     //double max_x = 0;
     algorithms::path_linear_sgd_layout(
