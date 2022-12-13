@@ -85,8 +85,8 @@ int main_layout(int argc, char **argv) {
     args::ValueFlag<uint64_t> nthreads(threading_opts, "N",
                                        "Number of threads to use for parallel operations.",
                                        {'t', "threads"});
-    args::Group gpu_opts(parser, "[ GPU ]");
-    args::Flag gpu_compute(gpu_opts, "gpu", "Enable computation with GPU.", {"gpu"});
+    args::Group optimized_opts(parser, "[ optimized data structure ]");
+    args::Flag optimized_compute(optimized_opts, "cpu", "Enable computation with optimized CPU.", {"cpu"});
     args::Group processing_info_opts(parser, "[ Processsing Information ]");
     args::Flag progress(processing_info_opts, "progress", "Write the current progress to stderr.", {'P', "progress"});
     args::Group program_info_opts(parser, "[ Program Information ]");
@@ -328,9 +328,9 @@ int main_layout(int argc, char **argv) {
 
     //double max_x = 0;
 
-    // run on gpu
-    if (gpu_compute) {
-        algorithms::path_linear_sgd_layout_gpu(
+    // run with optimized data structure
+    if (optimized_compute) {
+        algorithms::path_linear_sgd_layout_cache_optimized(
             graph,
             path_index,
             path_sgd_use_paths,

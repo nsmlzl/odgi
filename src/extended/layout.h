@@ -5,8 +5,8 @@
 #include <omp.h>
 #include <random>
 #include <math.h>
-#include <curand.h>
-#include <curand_kernel.h>
+//#include <curand.h>
+//#include <curand_kernel.h>
 #include <sstream>
 #include <iomanip>
 
@@ -18,7 +18,7 @@
 #define cuda_layout_profiling
 
 
-namespace cuda {
+namespace extended {
 
 
 struct node_t {
@@ -64,6 +64,6 @@ struct layout_config_t {
 };
 
 
-void cuda_layout(layout_config_t config, const odgi::graph_t &graph, std::vector<std::atomic<double>> &X, std::vector<std::atomic<double>> &Y);
+void cache_optimized_layout(layout_config_t config, const odgi::graph_t &graph, std::vector<std::atomic<double>> &X, std::vector<std::atomic<double>> &Y);
 
 }

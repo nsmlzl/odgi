@@ -20,7 +20,7 @@
 #include "XoshiroCpp.hpp"
 #include "progress.hpp"
 
-#include "cuda/layout.h"
+#include "extended/layout.h"
 
 namespace odgi {
     namespace algorithms {
@@ -49,7 +49,7 @@ namespace odgi {
                                     std::vector<std::atomic<double>> &X,
                                     std::vector<std::atomic<double>> &Y);
 
-        void path_linear_sgd_layout_gpu(const PathHandleGraph &graph,
+        void path_linear_sgd_layout_cache_optimized(const PathHandleGraph &graph,
                                     const xp::XP &path_index,
                                     const std::vector<path_handle_t> &path_sgd_use_paths,
                                     const uint64_t &iter_max,

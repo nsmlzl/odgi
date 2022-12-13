@@ -439,7 +439,7 @@ namespace odgi {
 
 
 
-        void path_linear_sgd_layout_gpu(const PathHandleGraph &graph,
+        void path_linear_sgd_layout_cache_optimized(const PathHandleGraph &graph,
                                     const xp::XP &path_index,
                                     const std::vector<path_handle_t> &path_sgd_use_paths,
                                     const uint64_t &iter_max,
@@ -460,7 +460,7 @@ namespace odgi {
                                     std::vector<std::atomic<double>> &X,
                                     std::vector<std::atomic<double>> &Y) {
 
-            cuda::layout_config_t config;
+            extended::layout_config_t config;
             config.iter_max = iter_max;
             config.min_term_updates = min_term_updates;
             config.eta_max = eta_max;
@@ -473,7 +473,7 @@ namespace odgi {
             config.space_quantization_step = space_quantization_step;
             config.nthreads = nthreads;
 
-            cuda::cuda_layout(config, dynamic_cast<const odgi::graph_t&>(graph), X, Y);
+            extended::cache_optimized_layout(config, dynamic_cast<const odgi::graph_t&>(graph), X, Y);
             return;
         }
 
