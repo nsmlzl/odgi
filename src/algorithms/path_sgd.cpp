@@ -8,6 +8,46 @@
 namespace odgi {
     namespace algorithms {
 
+        std::vector<double> path_linear_sgd_cache_optimized(const graph_t &graph,
+                                            const xp::XP &path_index,
+                                            const std::vector<path_handle_t> &path_sgd_use_paths,
+                                            const uint64_t &iter_max,
+                                            const uint64_t &iter_with_max_learning_rate,
+                                            const uint64_t &min_term_updates,
+                                            const double &delta,
+                                            const double &eps,
+                                            const double &eta_max,
+                                            const double &theta,
+                                            const uint64_t &space,
+                                            const uint64_t &space_max,
+                                            const uint64_t &space_quantization_step,
+                                            const double &cooling_start,
+                                            const uint64_t &nthreads,
+                                            const bool &progress,
+                                            const bool &snapshot,
+                                            std::vector<std::string> &snapshots,
+											const bool &target_sorting,
+											std::vector<bool>& target_nodes) {
+            if (target_sorting) {
+                std::cerr << "target_sorting not implemented" << std::endl;
+            }
+
+            extended_sort::layout_config_t config;
+            config.iter_max = iter_max;
+            config.min_term_updates = min_term_updates;
+            config.eta_max = eta_max;
+            config.eps = eps;
+            config.iter_with_max_learning_rate = (int32_t) iter_with_max_learning_rate;
+            config.first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
+            config.theta = theta;
+            config.space = space;
+            config.space_max = space_max;
+            config.space_quantization_step = space_quantization_step;
+            config.nthreads = nthreads;
+
+            return extended_sort::cache_optimized_sort(config, dynamic_cast<const odgi::graph_t&>(graph), path_index);
+        }
+
         std::vector<double> path_linear_sgd(const graph_t &graph,
                                             const xp::XP &path_index,
                                             const std::vector<path_handle_t> &path_sgd_use_paths,
@@ -508,6 +548,11 @@ namespace odgi {
 #ifdef debug_schedule
             std::cerr << std::endl;
 #endif
+            /*
+            for (int i = 0; i < etas.size(); i++) {
+                std::cout << "eta " << i << " : " << etas[i] << std::endl;
+            }
+            */
             return etas;
         }
 
@@ -531,9 +576,12 @@ namespace odgi {
                                                     const bool &snapshot,
                                                     const std::string &snapshot_prefix,
 													const bool &target_sorting,
-													std::vector<bool>& target_nodes) {
+													std::vector<bool>& target_nodes,
+                                                    const bool cache_optimized) {
             std::vector<string> snapshots;
-            std::vector<double> layout = path_linear_sgd(graph,
+            std::vector<double> layout;
+            if (cache_optimized) {
+                layout = path_linear_sgd_cache_optimized(graph,
                                                          path_index,
                                                          path_sgd_use_paths,
                                                          iter_max,
@@ -553,6 +601,28 @@ namespace odgi {
                                                          snapshots,
 														 target_sorting,
 														 target_nodes);
+            } else {
+                layout = path_linear_sgd(graph,
+                                         path_index,
+                                         path_sgd_use_paths,
+                                         iter_max,
+                                         iter_with_max_learning_rate,
+                                         min_term_updates,
+                                         delta,
+                                         eps,
+                                         eta_max,
+                                         theta,
+                                         space,
+                                         space_max,
+                                         space_quantization_step,
+                                         cooling_start,
+                                         nthreads,
+                                         progress,
+                                         snapshot,
+                                         snapshots,
+                                         target_sorting,
+                                         target_nodes);
+            }
             // TODO move the following into its own function that we can reuse
 #ifdef debug_components
             std::cerr << "node count: " << graph.get_node_count() << std::endl;

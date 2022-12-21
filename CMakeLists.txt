@@ -615,6 +615,7 @@ add_library(odgi_objs OBJECT
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_keep.cpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/diffpriv.cpp
   ${CMAKE_SOURCE_DIR}/src/extended/layout.cpp
+  ${CMAKE_SOURCE_DIR}/src/extended/sort.cpp
   ${lodepng_SOURCES}
   ${handlegraph_sources}
 )
@@ -795,7 +796,8 @@ set(odgi_HEADERS
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_length.hpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_keep.hpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/diffpriv.cpp
-  ${CMAKE_SOURCE_DIR}/src/extended/layout.h)
+  ${CMAKE_SOURCE_DIR}/src/extended/layout.h
+  ${CMAKE_SOURCE_DIR}/src/extended/sort.h)
 
 target_include_directories(odgi_objs PUBLIC ${odgi_INCLUDES})
 

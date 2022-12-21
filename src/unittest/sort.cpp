@@ -223,7 +223,8 @@ TEST_CASE("Sorting a graph with paths 1 node long", "[sort]") {
             false,
             "",
 			false,
-			target_nodes
+			target_nodes,
+            false
     );
 
     graph.apply_ordering(order, true);

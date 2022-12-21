@@ -112,6 +112,8 @@ int main_sort(int argc, char** argv) {
                                                    " identifier space.", {'O', "optimize"});
     args::Group threading_opts(parser, "[ Threading ]");
     args::ValueFlag<uint64_t> nthreads(threading_opts, "N", "Number of threads to use for parallel operations.", {'t', "threads"});
+    args::Group optimized_opts(parser, "[ optimized data structure ]");
+    args::Flag optimized_compute(optimized_opts, "cpu", "Enable computation with optimized CPU data structure.", {"cpu"});
     args::Group processing_info_opts(parser, "[ Processing Information ]");
     args::Flag progress(processing_info_opts, "progress", "Write the current progress to stderr.", {'P', "progress"});
     args::Group program_info_opts(parser, "[ Program Information ]");
@@ -466,7 +468,8 @@ int main_sort(int argc, char** argv) {
                                                               snapshot,
                                                               snapshot_prefix,
 															  _p_sgd_target_paths,
-															  is_ref);
+															  is_ref,
+                                                              args::get(optimized_compute));
                     break;
                 }
                 case 'f':
@@ -531,7 +534,8 @@ int main_sort(int argc, char** argv) {
                                                   snapshot,
                                                   snapshot_prefix,
 												  _p_sgd_target_paths,
-												  is_ref);
+												  is_ref,
+                                                  args::get(optimized_compute));
         graph.apply_ordering(order, true);
     } else if (args::get(breadth_first)) {
         graph.apply_ordering(algorithms::breadth_first_topological_order(graph, bf_chunk_size), true);
