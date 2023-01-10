@@ -290,7 +290,7 @@ std::vector<double> cache_optimized_sort(layout_config_t config, const odgi::gra
     path_data.path_count = path_count;
     path_data.total_path_steps = 0;
     //cudaMallocManaged(&path_data.paths, node_count * sizeof(cuda::path_t));
-    path_data.paths = (extended_sort::path_t*) malloc(node_count * sizeof(extended_sort::path_t));
+    path_data.paths = (extended_sort::path_t*) malloc(path_count * sizeof(extended_sort::path_t));
 
     vector<odgi::path_handle_t> path_handles{};
     path_handles.reserve(path_count);
