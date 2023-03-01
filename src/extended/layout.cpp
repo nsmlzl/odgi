@@ -481,26 +481,29 @@ void cache_optimized_layout(layout_config_t config, const odgi::graph_t &graph, 
 
 
     // cache zipf zetas
+    auto start_zeta = std::chrono::high_resolution_clock::now();
     double *zetas;
     uint64_t zetas_cnt = ((config.space <= config.space_max)? config.space : (config.space_max + (config.space - config.space_max) / config.space_quantization_step + 1)) + 1;
+    std::cout << "zetas_cnt: " << zetas_cnt << std::endl;
+    std::cout << "space_max: " << config.space_max << std::endl;
+    std::cout << "config.space: " << config.space << std::endl;
+    std::cout << "config.space_quantization: " << config.space_quantization_step << std::endl;
+
     //cudaMallocManaged(&zetas, zetas_cnt * sizeof(double));
     zetas = (double*) malloc(zetas_cnt * sizeof(double));
-    uint64_t last_quantized_i = 0;
-    // TODO parallelise with openmp?
+    double zeta_tmp = 0.0;
     for (uint64_t i = 1; i < config.space + 1; i++) {
-        uint64_t quantized_i = i;
-        uint64_t compressed_space = i;
-        if (i > config.space_max) {
-            quantized_i = config.space_max + (i - config.space_max) / config.space_quantization_step + 1;
-            compressed_space = config.space_max + ((i - config.space_max) / config.space_quantization_step) * config.space_quantization_step;
+        zeta_tmp += dirtyzipf::fast_precise_pow(1.0 / i, config.theta);
+        if (i <= config.space_max) {
+            zetas[i] = zeta_tmp;
         }
-
-        if (quantized_i != last_quantized_i) {
-            dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, compressed_space, config.theta);
-            zetas[quantized_i] = z_p.zeta();
-            last_quantized_i = quantized_i;
+        if (i >= config.space_max && (i - config.space_max) % config.space_quantization_step == 0) {
+            zetas[config.space_max + 1 + (i - config.space_max) / config.space_quantization_step] = zeta_tmp;
         }
     }
+    auto end_zeta = std::chrono::high_resolution_clock::now();
+    uint32_t duration_zeta_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_zeta - start_zeta).count();
+    std::cout << "Zeta precompute took " << duration_zeta_ms << "ms" << std::endl;
 
 
 
