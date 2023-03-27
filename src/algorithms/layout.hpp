@@ -18,6 +18,8 @@ void to_tsv(std::ostream &out,
             const std::vector<double> &Y,
             const std::vector<std::vector<handlegraph::handle_t>> weak_components);
 
+double coord_dist(xy_d_t point1, xy_d_t point2);
+
 union conv_t { uint64_t i; double d; };
 
 class Layout {
