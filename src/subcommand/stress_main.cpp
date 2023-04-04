@@ -1,6 +1,7 @@
 #include "odgi.hpp"
 #include "algorithms/layout.hpp"
 #include <omp.h>
+#include "algorithms/xp.hpp"
 
 #include "subcommand.hpp"
 #include "args.hxx"
@@ -10,14 +11,142 @@
 
 namespace odgi {
     namespace algorithms {
-        // function to compute stress, given the current layout
-        // This is copied from previous implementation on the original odgi implementation. 
-        // We can design easier way to compute metrics using the lean data structure. [TODO]
-        void compute_stress(odgi::algorithms::layout::Layout &layout, 
-                const handlegraph::PathHandleGraph &graph, 
-                int thread_count,
-                double &stress_result) {
 
+        void compute_stress(const handlegraph::PathHandleGraph &graph, odgi::algorithms::layout::Layout &layout, 
+                xp::XP &path_index, int thread_count, int64_t radius_arg, double &stress_result) {
+
+            uint32_t max_step_count = 0;
+            graph.for_each_path_handle(
+                    [&] (const odgi::path_handle_t& p) {
+                    uint32_t step_count = graph.get_step_count(p);
+                    if (step_count > max_step_count) {
+                        max_step_count = step_count;
+                    }
+                    });
+            double sum_stress = 0;
+
+            uint32_t path_count = path_index.path_count;
+            uint32_t radius_max = (radius_arg >= 0)? uint32_t(radius_arg) : max_step_count;
+
+            uint32_t total_step_count = 0;
+            for (uint32_t radius = 0; radius <= radius_max; radius++) {
+                double cur_radius_stress = 0.0;
+#pragma omp parallel for schedule(dynamic) num_threads(thread_count)
+                for (uint32_t pidx = 1; pidx <= path_count; pidx++) {
+                    double path_stress = 0.0;
+                    path_handle_t path = as_path_handle(pidx);
+                    uint32_t path_step_count = path_index.get_path_step_count(path);
+                    for (uint32_t rank = 0; rank < path_step_count; rank++) {   // < path_step_count - radius?
+                        step_handle_t step_a;
+                        as_integers(step_a)[0] = pidx;
+                        as_integers(step_a)[1] = rank;
+                        handle_t handle_a = path_index.get_handle_of_step(step_a);
+                        // only analyze length of node itself
+                        if (radius == 0) {
+                            // path distance
+                            double path_dist = double(graph.get_length(handle_a));
+                            // visualization distance
+                            odgi::algorithms::xy_d_t h_coords_start, h_coords_end;
+                            h_coords_start = layout.coords(handle_a);
+                            h_coords_end = layout.coords(graph.flip(handle_a));
+                            double vis_dist = abs(odgi::algorithms::layout::coord_dist(h_coords_start, h_coords_end));
+
+                            if (path_dist < 1.0) {
+                                std::cerr << "path_dist (" << path_dist << ") smaller than 1.0" << std::endl;
+                            }
+                            if (path_dist <= 0.0) {
+                                std::cerr << "path_dist (" << path_dist << ") smaller/equal than 0.0" << std::endl;
+                                path_dist = 1e-9;
+                            }
+                            double stress_term = pow((path_dist - vis_dist) / path_dist, 2);
+                            path_stress += stress_term;
+                        } else {
+                            if (rank < path_step_count - radius) {
+                                step_handle_t step_b;
+                                as_integers(step_b)[0] = pidx;
+                                as_integers(step_b)[1] = rank + radius;
+                                handle_t handle_b = path_index.get_handle_of_step(step_b);
+
+                                double seq_len_a = double(graph.get_length(handle_a));
+                                double seq_len_b = double(graph.get_length(handle_b));
+
+                                double pos_in_path_a = double(path_index.get_position_of_step(step_a));
+                                double pos_in_path_b = double(path_index.get_position_of_step(step_b));
+
+                                for (int comb = 0; comb < 4; comb++) {
+                                    double pos_a = pos_in_path_a;
+                                    double pos_b = pos_in_path_b;
+
+                                    bool node_a_is_reverse = graph.get_is_reverse(handle_a);
+                                    bool use_other_end_a = node_a_is_reverse;
+                                    if (comb > 1) {
+                                        pos_a += seq_len_a;
+                                        use_other_end_a = !node_a_is_reverse;
+                                    }
+                                    bool node_b_is_reverse = graph.get_is_reverse(handle_b);
+                                    bool use_other_end_b = node_b_is_reverse;
+                                    if (comb == 1 || comb == 3) {
+                                        pos_b += seq_len_b;
+                                        use_other_end_b = !node_b_is_reverse;
+                                    }
+                                    double path_dist = double(abs(pos_b - pos_a));
+
+                                    // when radius 1: don't compute stress for direct neighbors (vis_dist should be close to 0.0)
+                                    // also, when looping, don't compute for same elements
+                                    if (path_dist > 0.0) {
+                                        odgi::algorithms::xy_d_t vis_coords_a, vis_coords_b;
+                                        if (!use_other_end_a) {
+                                            vis_coords_a = layout.coords(handle_a);
+                                        } else {
+                                            vis_coords_a = layout.coords(graph.flip(handle_a));
+                                        }
+                                        if (!use_other_end_b) {
+                                            vis_coords_b = layout.coords(handle_b);
+                                        } else {
+                                            vis_coords_b = layout.coords(graph.flip(handle_b));
+                                        }
+                                        double vis_dist = abs(double(odgi::algorithms::layout::coord_dist(vis_coords_a, vis_coords_b)));
+
+
+                                        // TODO: why fails at radius greater 1?
+                                        if (path_dist < 1.0) {
+                                            std::cerr << "path_dist (" << path_dist << ") smaller than 1.0" << std::endl;
+                                            std::cerr << "combination: " << comb << " path " << as_integers(step_a)[0];
+                                            std::cerr << " a: id " << graph.get_id(handle_a) << " rank " << as_integers(step_a)[1] << " pos " << pos_in_path_a << " use-other-end " << use_other_end_a << " reverse " << node_a_is_reverse << " seq-len " << seq_len_a;
+                                            std::cerr << " b: id " << graph.get_id(handle_b) << " rank " << as_integers(step_b)[1] << " pos " << pos_in_path_b << " use-other-end " << use_other_end_b << " reverse " << node_b_is_reverse << " seq-len " << seq_len_b;
+                                            std::cerr << std::endl;
+                                        }
+                                        if (path_dist <= 0.0) {
+                                            //std::cerr << "path_dist (" << path_dist << ") smaller/equal than 0.0" << std::endl;
+                                            path_dist = 1e-9;
+                                        }
+                                        double stress_term = pow((path_dist - vis_dist) / path_dist, 2);
+                                        path_stress += stress_term;
+                                    } else {
+                                        if (path_dist > 0.0) {
+                                            std::cerr << "path_dist of " << path_dist << " should not be ignored" << std::endl;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                    //std::cout << "pidx: " << pidx << " step_count " << path_step_count << std::endl;
+                    //total_step_count += path_step_count;
+
+                    cur_radius_stress += path_stress;
+                }
+                sum_stress += cur_radius_stress;
+                std::cout << "radius[" << radius << "/" << max_step_count << "]: added stress " << cur_radius_stress << " (total: " << sum_stress << ")" << std::endl;
+            }
+            stress_result = sum_stress;   // TODO remove
+            std::cout << "total-step-count " << total_step_count << std::endl;
+
+
+
+
+            /*
             std::vector<odgi::path_handle_t> paths;
             graph.for_each_path_handle([&] (const odgi::path_handle_t &p) {
                     paths.push_back(p);
@@ -108,6 +237,7 @@ namespace odgi {
             }
 
             stress_result = sum_stress_squared_dist_weight / (double)num_steps_iterated;
+            */
         }
     }
 
@@ -130,6 +260,8 @@ namespace odgi {
         args::Group mandatory_opts(parser, "[ MANDATORY OPTIONS ]");
         args::ValueFlag<std::string> dg_in_file(mandatory_opts, "FILE", "Load the succinct variation graph in ODGI format from this *FILE*. The file name usually ends with *.og*. It also accepts GFAv1, but the on-the-fly conversion to the ODGI format requires additional time!", {'i', "idx"});
         args::ValueFlag<std::string> layout_in_file(mandatory_opts, "FILE", "Read the layout coordinates from this .lay format FILE produced by odgi layout.", {'c', "coords-in"});
+        args::ValueFlag<std::string> xp_in_file(mandatory_opts, "FILE", "Load the path index from this FILE so that it does not have to be created for the layout calculation.", {'X', "path-index"});
+        args::ValueFlag<int64_t> radius_arg(mandatory_opts, "N", "Radius of stress analysis (when negative uses longest path length)", {'R', "radius"});
 
         args::Group threading_opts(parser, "[ Threading ]");
         args::ValueFlag<uint64_t> nthreads(threading_opts, "N",
@@ -172,7 +304,15 @@ namespace odgi {
             return 1;
         }
 
+        if (!xp_in_file) {
+            std::cerr
+                << "[odgi::stress] error: please specify an input file from where to load the path-index from via -X=[FILE], --path-index=[FILE]."
+                << std::endl;
+            return 1;
+        }
+
         const uint64_t num_threads = nthreads ? args::get(nthreads) : 1;
+        const int64_t radius = radius_arg ? args::get(radius_arg) : 1;
 
         graph_t graph;
         if (!args::get(dg_in_file).empty()) {
@@ -198,8 +338,16 @@ namespace odgi {
             }
         }
 
+        xp::XP path_index;
+        if (xp_in_file) {
+            std::ifstream in;
+            in.open(args::get(xp_in_file));
+            path_index.load(in);
+            in.close();
+        }
+
         double stress_result = 0;
-        algorithms::compute_stress(layout, graph, num_threads, stress_result);
+        algorithms::compute_stress(graph, layout, path_index, num_threads, radius, stress_result);
         std::cout << "Stress: " << stress_result << std::endl;
         return 0;
     }
