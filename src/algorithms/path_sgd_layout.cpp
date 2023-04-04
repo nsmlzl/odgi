@@ -409,6 +409,8 @@ namespace odgi {
 
                         };
 
+                auto start_compute = std::chrono::high_resolution_clock::now();
+
                 std::thread checker(checker_lambda);
                 std::thread snapshot_thread(snapshot_lambda);
 
@@ -425,6 +427,10 @@ namespace odgi {
                 snapshot_thread.join();
 
                 checker.join();
+
+                auto end_compute = std::chrono::high_resolution_clock::now();
+                uint32_t duration_compute_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_compute - start_compute).count();
+                std::cout << "optv1 layout compute took " << duration_compute_ms << "ms" << std::endl;
             }
 
             if (progress) {
