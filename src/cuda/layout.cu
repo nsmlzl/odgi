@@ -170,7 +170,12 @@ void update_pos_gpu(int64_t &n1_pos_in_path, uint32_t &n1_id, int &n1_offset,
 }
 
 __global__ void cuda_device_layout(int iter, cuda::layout_config_t config, curandStateCoalesced_t *rnd_state, double eta, double *zetas, 
-                                   cuda::node_data_t node_data, cuda::path_data_t path_data) {    
+                                   cuda::node_data_t node_data, cuda::path_data_t path_data) {
+    // kernel begins. Print out the block id
+    // if (threadIdx.x == 0) {
+    //     printf("==== Block [%d] Begins ====\n", blockIdx.x);
+    // }
+
     uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t smid = __mysmid();
     assert(smid < 84);
@@ -314,6 +319,10 @@ __global__ void cuda_device_layout(int iter, cuda::layout_config_t config, curan
         }
     }
 
+    // kernel ends. Print out the block id
+    // if (threadIdx.x == 0) {
+    //     printf("==== Block [%d] Ends ====\n", blockIdx.x);
+    // }
 }
 
 
