@@ -290,24 +290,35 @@ __global__ void cuda_device_layout(int iter, cuda::layout_config_t config, curan
 // #define UPDATE_TIMES 2
     uint64_t UPDATE_TIMES = config.gpu_data_reuse_factor;
 
+    int64_t pos_in_path[2] = {n1_pos_in_path, n2_pos_in_path};
+    uint32_t id[2] = {n1_id, n2_id};
+    int offset[2] = {n1_offset, n2_offset};
+
     // Data Reuse for the non-cooling iteration
     if (!cooling[threadIdx.x / WARP_SIZE]) {
         // Shuffle and Update (DATA_REUSE_TIMES = UPDATE_TIMES - 1) times (UPDATE_TIMES is the total update times when calling `cuda_device_layout` once)
         for (int i = 0; i < UPDATE_TIMES - 1; i++) {
             // Shuffle the step data within a warp
-            int shuffle_laneId = curand_coalesced(thread_rnd_state, threadIdx.x) % WARP_SIZE;
-            uint64_t n2_pos_in_path_tmp = __shfl_sync(0xffffffff, n2_pos_in_path, shuffle_laneId);
-            uint32_t n2_id_tmp = __shfl_sync(0xffffffff, n2_id, shuffle_laneId);
-            int n2_offset_tmp = __shfl_sync(0xffffffff, n2_offset, shuffle_laneId);
+            int shuffle_laneId_0 = curand_coalesced(thread_rnd_state, threadIdx.x) % (WARP_SIZE * 2);
+            int index_0 = shuffle_laneId_0 / WARP_SIZE;
+            int subindex_0 = shuffle_laneId_0 % WARP_SIZE;
 
-            n2_pos_in_path = n2_pos_in_path_tmp;
-            n2_id = n2_id_tmp;
-            n2_offset = n2_offset_tmp;
+            int shuffle_laneId_1 = curand_coalesced(thread_rnd_state, threadIdx.x) % (WARP_SIZE * 2);
+            int index_1 = shuffle_laneId_1 / WARP_SIZE;
+            int subindex_1 = shuffle_laneId_1 % WARP_SIZE;
 
-            if ((n1_id != n2_id) || (n1_offset != n2_offset)) { // Only update if the two nodes are different
-                update_pos_gpu(n1_pos_in_path, n1_id, n1_offset,
-                            n2_pos_in_path, n2_id, n2_offset,
-                            eta, node_data);
+            int64_t pos_in_path_tmp_0 = __shfl_sync(0xffffffff, pos_in_path[index_0], subindex_0);
+            uint32_t id_tmp_0 = __shfl_sync(0xffffffff, id[index_0], subindex_0);
+            int offset_tmp_0 = __shfl_sync(0xffffffff, offset[index_0], subindex_0);
+
+            int64_t pos_in_path_tmp_1 = __shfl_sync(0xffffffff, pos_in_path[index_1], subindex_1);
+            uint32_t id_tmp_1 = __shfl_sync(0xffffffff, id[index_1], subindex_1);
+            int offset_tmp_1 = __shfl_sync(0xffffffff, offset[index_1], subindex_1);
+
+            if ((id_tmp_0 != id_tmp_1) || (offset_tmp_0 != offset_tmp_1)) { // Only update if the two nodes are different
+                update_pos_gpu(pos_in_path_tmp_0, id_tmp_0, offset_tmp_0,
+                               pos_in_path_tmp_1, id_tmp_1, offset_tmp_1,
+                               eta, node_data);
             }
 
         }
