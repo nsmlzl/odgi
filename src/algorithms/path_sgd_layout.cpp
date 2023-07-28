@@ -209,40 +209,56 @@ namespace odgi {
                                     std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
 #endif
 
-                                    if (cooling.load() || flip(gen)) {
-                                        if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
-                                            // go backward
-                                            uint64_t jump_space = std::min(space, s_rank);
-                                            uint64_t space = jump_space;
-                                            if (jump_space > space_max){
-                                                space = space_max + (jump_space - space_max) / space_quantization_step + 1;
-                                            }
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
-                                            uint64_t z_i = z(gen);
-                                            //assert(z_i <= path_space);
-                                            as_integers(step_b)[0] = as_integer(path);
-                                            as_integers(step_b)[1] = s_rank - z_i;
-                                        } else {
-                                            // go forward
-                                            uint64_t jump_space = std::min(space, path_step_count - s_rank - 1);
-                                            uint64_t space = jump_space;
-                                            if (jump_space > space_max){
-                                                space = space_max + (jump_space - space_max) / space_quantization_step + 1;
-                                            }
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
-                                            dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
-                                            uint64_t z_i = z(gen);
-                                            //assert(z_i <= path_space);
-                                            as_integers(step_b)[0] = as_integer(path);
-                                            as_integers(step_b)[1] = s_rank + z_i;
-                                        }
+                                    
+
+
+                                    int INTERVAL = 10;
+                                    // simply select step_b as the next step in the path
+                                    if (s_rank < path_step_count - INTERVAL) {
+                                        as_integers(step_b)[0] = path_i;
+                                        as_integers(step_b)[1] = s_rank + INTERVAL;
                                     } else {
-                                        // sample randomly across the path
-                                        std::uniform_int_distribution<uint64_t> rando(0, graph.get_step_count(path)-1);
-                                        as_integers(step_b)[0] = as_integer(path);
-                                        as_integers(step_b)[1] = rando(gen);
+                                        // or the previous step in the path
+                                        as_integers(step_b)[0] = path_i;
+                                        as_integers(step_b)[1] = s_rank - INTERVAL;
                                     }
+
+
+                                    // if (cooling.load() || flip(gen)) {
+                                    // // if (cooling.load()) {
+                                    //     if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
+                                    //         // go backward
+                                    //         uint64_t jump_space = std::min(space, s_rank);
+                                    //         uint64_t space = jump_space;
+                                    //         if (jump_space > space_max){
+                                    //             space = space_max + (jump_space - space_max) / space_quantization_step + 1;
+                                    //         }
+                                    //         dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
+                                    //         dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                                    //         uint64_t z_i = z(gen);
+                                    //         //assert(z_i <= path_space);
+                                    //         as_integers(step_b)[0] = as_integer(path);
+                                    //         as_integers(step_b)[1] = s_rank - z_i;
+                                    //     } else {
+                                    //         // go forward
+                                    //         uint64_t jump_space = std::min(space, path_step_count - s_rank - 1);
+                                    //         uint64_t space = jump_space;
+                                    //         if (jump_space > space_max){
+                                    //             space = space_max + (jump_space - space_max) / space_quantization_step + 1;
+                                    //         }
+                                    //         dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
+                                    //         dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                                    //         uint64_t z_i = z(gen);
+                                    //         //assert(z_i <= path_space);
+                                    //         as_integers(step_b)[0] = as_integer(path);
+                                    //         as_integers(step_b)[1] = s_rank + z_i;
+                                    //     }
+                                    // } else {
+                                    //     // sample randomly across the path
+                                    //     std::uniform_int_distribution<uint64_t> rando(0, graph.get_step_count(path)-1);
+                                    //     as_integers(step_b)[0] = as_integer(path);
+                                    //     as_integers(step_b)[1] = rando(gen);
+                                    // }
 
 
                                     // and the graph handles, which we need to record the update
