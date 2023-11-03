@@ -814,7 +814,7 @@ if (CUDA_KRNLS)
 
     list(APPEND odgi_INCLUDES "${CUDA_INCLUDE_DIRS}")
     list(APPEND odgi_HEADERS ${CMAKE_SOURCE_DIR}/src/cuda/layout.h)
-    add_library(odgi_objs OBJECT ${CMAKE_SOURCE_DIR}/src/cuda/layout.cu)
+    target_sources(odgi_objs PUBLIC ${CMAKE_SOURCE_DIR}/src/cuda/layout.cu)
 
     # define precompiler flag WITH_CUDA_KRNLS
     add_compile_definitions(WITH_CUDA_KRNLS)
