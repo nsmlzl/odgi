@@ -20,7 +20,9 @@
 #include "XoshiroCpp.hpp"
 #include "progress.hpp"
 
-// #include "cuda/layout.h"
+#ifdef WITH_CUDA_KRNLS
+#include "cuda/layout.h"
+#endif
 
 namespace odgi {
     namespace algorithms {
