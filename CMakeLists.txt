@@ -805,8 +805,6 @@ set(odgi_HEADERS
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_keep.hpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/diffpriv.cpp)
 
-target_include_directories(odgi_objs PUBLIC ${odgi_INCLUDES})
-
 if (CUDA_KRNLS)
     message(STATUS "Compiling odgi with CUDA GPU acceleration kernels")
     find_package(CUDA REQUIRED)
@@ -822,6 +820,8 @@ if (CUDA_KRNLS)
     # arch and gencode are configured for our GPU (RTX A6000)
     target_compile_options(odgi_objs PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: -std=c++17 -Xcompiler=-fopenmp -arch=sm_86 -gencode=arch=compute_86,code=sm_86>)
 endif (CUDA_KRNLS)
+
+target_include_directories(odgi_objs PUBLIC ${odgi_INCLUDES})
 
 add_library(libodgi_static STATIC $<TARGET_OBJECTS:odgi_objs>)
 set_target_properties(libodgi_static PROPERTIES OUTPUT_NAME "odgi")
