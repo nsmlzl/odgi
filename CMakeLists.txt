@@ -598,6 +598,7 @@ add_library(odgi_objs OBJECT
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_sgd_layout.cpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/draw.cpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/layout.cpp
+  ${CMAKE_SOURCE_DIR}/src/algorithms/pgsgd.cpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/atomic_image.cpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/remove_isolated.cpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/expand_context.cpp
@@ -768,6 +769,7 @@ set(odgi_HEADERS
   ${CMAKE_SOURCE_DIR}/src/algorithms/extract_extending_graph.hpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/extract_connecting_graph.hpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/cover.hpp
+  ${CMAKE_SOURCE_DIR}/src/algorithms/pgsgd.h
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_sgd.hpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/path_sgd_layout.hpp
   ${CMAKE_SOURCE_DIR}/src/algorithms/kmer.hpp
@@ -811,8 +813,8 @@ if (CUDA_KRNLS)
     enable_language(CUDA)
 
     list(APPEND odgi_INCLUDES "${CUDA_INCLUDE_DIRS}")
-    list(APPEND odgi_HEADERS ${CMAKE_SOURCE_DIR}/src/cuda/layout.h)
-    target_sources(odgi_objs PUBLIC ${CMAKE_SOURCE_DIR}/src/cuda/layout.cu)
+    list(APPEND odgi_HEADERS ${CMAKE_SOURCE_DIR}/src/cuda/pgsgd_layout.h)
+    target_sources(odgi_objs PUBLIC ${CMAKE_SOURCE_DIR}/src/cuda/pgsgd_layout.cu)
 
     # define precompiler flag WITH_CUDA_KRNLS
     add_compile_definitions(WITH_CUDA_KRNLS)

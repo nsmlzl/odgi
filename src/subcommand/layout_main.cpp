@@ -11,6 +11,10 @@
 #include "hilbert.hpp"
 #include "utils.hpp"
 
+#ifdef WITH_CUDA_KRNLS
+#include "cuda/pgsgd_layout.h"
+#endif
+
 namespace odgi {
 
 using namespace odgi::subcommand;
@@ -330,7 +334,8 @@ int main_layout(int argc, char **argv) {
 
     // run on gpu
     if (gpu_compute) {
-        algorithms::path_linear_sgd_layout_gpu(
+#ifdef WITH_CUDA_KRNLS
+        cuda::path_linear_sgd_layout_gpu(
             graph,
             path_index,
             path_sgd_use_paths,
@@ -352,6 +357,9 @@ int main_layout(int argc, char **argv) {
             graph_X,
             graph_Y
             );
+#else
+        std::cerr << "ERROR: odgi compiled without CUDA GPU kernels" << std::endl;
+#endif
     } else {
         algorithms::path_linear_sgd_layout(
             graph,

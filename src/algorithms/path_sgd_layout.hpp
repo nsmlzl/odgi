@@ -19,10 +19,11 @@
 #include "dirty_zipfian_int_distribution.h"
 #include "XoshiroCpp.hpp"
 #include "progress.hpp"
+#include "algorithms/pgsgd.h"
 
-#ifdef WITH_CUDA_KRNLS
-#include "cuda/layout.h"
-#endif
+// #ifdef WITH_CUDA_KRNLS
+// #include "cuda/layout.h"
+// #endif
 
 namespace odgi {
     namespace algorithms {
@@ -51,26 +52,26 @@ namespace odgi {
                                     std::vector<std::atomic<double>> &X,
                                     std::vector<std::atomic<double>> &Y);
 
-        void path_linear_sgd_layout_gpu(const PathHandleGraph &graph,
-                                    const xp::XP &path_index,
-                                    const std::vector<path_handle_t> &path_sgd_use_paths,
-                                    const uint64_t &iter_max,
-                                    const uint64_t &iter_with_max_learning_rate,
-                                    const uint64_t &min_term_updates,
-                                    const double &delta,
-                                    const double &eps,
-                                    const double &eta_max,
-                                    const double &theta,
-                                    const uint64_t &space,
-                                    const uint64_t &space_max,
-                                    const uint64_t &space_quantization_step,
-                                    const double &cooling_start,
-                                    const uint64_t &nthreads,
-                                    const bool &progress,
-                                    const bool &snapshot,
-                                    const std::string &snapshot_prefix,
-                                    std::vector<std::atomic<double>> &X,
-                                    std::vector<std::atomic<double>> &Y);
+        // void path_linear_sgd_layout_gpu(const PathHandleGraph &graph,
+        //                             const xp::XP &path_index,
+        //                             const std::vector<path_handle_t> &path_sgd_use_paths,
+        //                             const uint64_t &iter_max,
+        //                             const uint64_t &iter_with_max_learning_rate,
+        //                             const uint64_t &min_term_updates,
+        //                             const double &delta,
+        //                             const double &eps,
+        //                             const double &eta_max,
+        //                             const double &theta,
+        //                             const uint64_t &space,
+        //                             const uint64_t &space_max,
+        //                             const uint64_t &space_quantization_step,
+        //                             const double &cooling_start,
+        //                             const uint64_t &nthreads,
+        //                             const bool &progress,
+        //                             const bool &snapshot,
+        //                             const std::string &snapshot_prefix,
+        //                             std::vector<std::atomic<double>> &X,
+        //                             std::vector<std::atomic<double>> &Y);
 
 /// our learning schedule
         std::vector<double> path_linear_sgd_layout_schedule(const double &w_min,

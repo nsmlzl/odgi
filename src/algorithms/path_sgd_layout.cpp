@@ -35,6 +35,72 @@ namespace odgi {
             std::cerr << "space_quantization_step: " << space_quantization_step << std::endl;
             std::cerr << "cooling_start: " << cooling_start << std::endl;
 #endif
+            pgsgd::check_valid_graph_dim(graph);
+
+            // create eta array
+            double *etas = new double[iter_max];
+
+            // create node data structure
+            // consisting of sequence length and coords
+            pgsgd::node_data_t node_data;
+            node_data.node_count = graph.get_node_count();
+            node_data.nodes = new pgsgd::node_t[node_data.node_count];
+
+            // create path data structure
+            pgsgd::path_data_t path_data;
+            path_data.path_count = graph.get_path_count();
+            path_data.total_path_steps = pgsgd::get_total_path_steps(graph);
+            path_data.paths = new pgsgd::path_t[path_data.path_count];
+            path_data.element_array = new pgsgd::path_element_t[path_data.total_path_steps];
+
+            // precomputed zetas
+            double *zetas = new double[pgsgd::get_zeta_cnt(space, space_max, space_quantization_step)];
+
+            pgsgd::fill_pgsgd_data_structure();
+
+            // TODO kernel
+
+            delete etas;
+            delete node_data.nodes;
+            delete path_data.paths;
+            delete path_data.element_array;
+            delete zetas;
+
+            return;
+        }
+
+
+        void path_linear_sgd_layout_bak(const PathHandleGraph &graph,
+                                    const xp::XP &path_index,
+                                    const std::vector<path_handle_t> &path_sgd_use_paths,
+                                    const uint64_t &iter_max,
+                                    const uint64_t &iter_with_max_learning_rate,
+                                    const uint64_t &min_term_updates,
+                                    const double &delta,
+                                    const double &eps,
+                                    const double &eta_max,
+                                    const double &theta,
+                                    const uint64_t &space,
+                                    const uint64_t &space_max,
+                                    const uint64_t &space_quantization_step,
+                                    const double &cooling_start,
+                                    const uint64_t &nthreads,
+                                    const bool &progress,
+                                    const bool &snapshot,
+                                    const std::string &snapshot_prefix,
+                                    std::vector<std::atomic<double>> &X,
+                                    std::vector<std::atomic<double>> &Y) {
+#ifdef debug_path_sgd
+            std::cerr << "iter_max: " << iter_max << std::endl;
+            std::cerr << "min_term_updates: " << min_term_updates << std::endl;
+            std::cerr << "delta: " << delta << std::endl;
+            std::cerr << "eps: " << eps << std::endl;
+            std::cerr << "theta: " << theta << std::endl;
+            std::cerr << "space: " << space << std::endl;
+            std::cerr << "space_max: " << space_max << std::endl;
+            std::cerr << "space_quantization_step: " << space_quantization_step << std::endl;
+            std::cerr << "cooling_start: " << cooling_start << std::endl;
+#endif
 
             uint64_t first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
             //std::cerr << "first cooling iteration " << first_cooling_iteration << std::endl;
@@ -432,47 +498,47 @@ namespace odgi {
 
 
 
-        void path_linear_sgd_layout_gpu(const PathHandleGraph &graph,
-                                    const xp::XP &path_index,
-                                    const std::vector<path_handle_t> &path_sgd_use_paths,
-                                    const uint64_t &iter_max,
-                                    const uint64_t &iter_with_max_learning_rate,
-                                    const uint64_t &min_term_updates,
-                                    const double &delta,
-                                    const double &eps,
-                                    const double &eta_max,
-                                    const double &theta,
-                                    const uint64_t &space,
-                                    const uint64_t &space_max,
-                                    const uint64_t &space_quantization_step,
-                                    const double &cooling_start,
-                                    const uint64_t &nthreads,
-                                    const bool &progress,
-                                    const bool &snapshot,
-                                    const std::string &snapshot_prefix,
-                                    std::vector<std::atomic<double>> &X,
-                                    std::vector<std::atomic<double>> &Y) {
+        // void path_linear_sgd_layout_gpu(const PathHandleGraph &graph,
+        //                             const xp::XP &path_index,
+        //                             const std::vector<path_handle_t> &path_sgd_use_paths,
+        //                             const uint64_t &iter_max,
+        //                             const uint64_t &iter_with_max_learning_rate,
+        //                             const uint64_t &min_term_updates,
+        //                             const double &delta,
+        //                             const double &eps,
+        //                             const double &eta_max,
+        //                             const double &theta,
+        //                             const uint64_t &space,
+        //                             const uint64_t &space_max,
+        //                             const uint64_t &space_quantization_step,
+        //                             const double &cooling_start,
+        //                             const uint64_t &nthreads,
+        //                             const bool &progress,
+        //                             const bool &snapshot,
+        //                             const std::string &snapshot_prefix,
+        //                             std::vector<std::atomic<double>> &X,
+        //                             std::vector<std::atomic<double>> &Y) {
 
-#ifdef WITH_CUDA_KRNLS
-            cuda::layout_config_t config;
-            config.iter_max = iter_max;
-            config.min_term_updates = min_term_updates;
-            config.eta_max = eta_max;
-            config.eps = eps;
-            config.iter_with_max_learning_rate = (int32_t)  iter_with_max_learning_rate;
-            config.first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
-            config.theta = theta;
-            config.space = uint32_t(space);
-            config.space_max = uint32_t(space_max);
-            config.space_quantization_step = uint32_t(space_quantization_step);
-            config.nthreads = nthreads;
+// #ifdef WITH_CUDA_KRNLS
+        //     cuda::layout_config_t config;
+        //     config.iter_max = iter_max;
+        //     config.min_term_updates = min_term_updates;
+        //     config.eta_max = eta_max;
+        //     config.eps = eps;
+        //     config.iter_with_max_learning_rate = (int32_t)  iter_with_max_learning_rate;
+        //     config.first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
+        //     config.theta = theta;
+        //     config.space = uint32_t(space);
+        //     config.space_max = uint32_t(space_max);
+        //     config.space_quantization_step = uint32_t(space_quantization_step);
+        //     config.nthreads = nthreads;
 
-            cuda::cuda_layout(config, dynamic_cast<const odgi::graph_t&>(graph), X, Y);
-#else
-            std::cerr << "ERROR: odgi compiled without CUDA GPU kernels" << std::endl;
-#endif
-            return;
-        }
+        //     cuda::cuda_layout(config, dynamic_cast<const odgi::graph_t&>(graph), X, Y);
+// #else
+        //     std::cerr << "ERROR: odgi compiled without CUDA GPU kernels" << std::endl;
+// #endif
+        //     return;
+        // }
 
 
 
