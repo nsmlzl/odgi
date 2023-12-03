@@ -2,7 +2,12 @@
 
 #include <iostream>
 #include <cstdint>
+#include <math.h>
+#include <vector>
+#include <atomic>
+
 #include "odgi.hpp"
+#include "dirty_zipfian_int_distribution.h"
 
 namespace odgi {
     namespace algorithms {
@@ -43,10 +48,19 @@ namespace odgi {
 
             uint32_t get_total_path_steps(const PathHandleGraph &graph);
 
-            uint64_t get_zeta_cnt(const uint64_t &space, const uint64_t &space_max, const uint64_t &space_quantization_step);
+            uint64_t get_zeta_cnt(const uint64_t &space, const uint64_t &space_max,
+                    const uint64_t &space_quantization_step);
 
-            void fill_pgsgd_data_structure();
+            void fill_etas(double *etas, const int64_t &iter_max, const int64_t &iter_with_max_learning_rate,
+                    const double &eps, const double &eta_max);
 
+            void fill_node_data(pgsgd::node_data_t &node_data, const PathHandleGraph &graph,
+                    std::vector<std::atomic<double>> &X, std::vector<std::atomic<double>> &Y);
+
+            void fill_path_data(pgsgd::path_data_t &path_data, const PathHandleGraph &graph, const uint64_t &nthreads);
+
+            void fill_zetas(double *zetas, const uint64_t &space, const uint64_t &space_max,
+                    const uint64_t &space_quantization_step, const double &theta);
         }
     }
 }

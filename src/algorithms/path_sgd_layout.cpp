@@ -39,12 +39,14 @@ namespace odgi {
 
             // create eta array
             double *etas = new double[iter_max];
+            pgsgd::fill_etas(etas, iter_max, iter_with_max_learning_rate, eps, eta_max);
 
             // create node data structure
             // consisting of sequence length and coords
             pgsgd::node_data_t node_data;
             node_data.node_count = graph.get_node_count();
             node_data.nodes = new pgsgd::node_t[node_data.node_count];
+            pgsgd::fill_node_data(node_data, graph, X, Y);
 
             // create path data structure
             pgsgd::path_data_t path_data;
@@ -52,11 +54,11 @@ namespace odgi {
             path_data.total_path_steps = pgsgd::get_total_path_steps(graph);
             path_data.paths = new pgsgd::path_t[path_data.path_count];
             path_data.element_array = new pgsgd::path_element_t[path_data.total_path_steps];
+            pgsgd::fill_path_data(path_data, graph, nthreads);
 
             // precomputed zetas
             double *zetas = new double[pgsgd::get_zeta_cnt(space, space_max, space_quantization_step)];
-
-            pgsgd::fill_pgsgd_data_structure();
+            pgsgd::fill_zetas(zetas, space, space_max, space_quantization_step, theta);
 
             // TODO kernel
 

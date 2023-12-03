@@ -35,12 +35,14 @@ namespace odgi {
             // create eta array
             double *etas;
             cudaMallocManaged(&etas, iter_max * sizeof(double));
+            pgsgd::fill_etas(etas, iter_max, iter_with_max_learning_rate, eps, eta_max);
 
             // create node data structure
             // consisting of sequence length and coords
             pgsgd::node_data_t node_data;
             node_data.node_count = graph.get_node_count();
             cudaMallocManaged(&node_data.nodes, node_data.node_count * sizeof(pgsgd::node_t));
+            pgsgd::fill_node_data(node_data, graph, X, Y);
 
             // create path data structure
             pgsgd::path_data_t path_data;
@@ -48,12 +50,12 @@ namespace odgi {
             path_data.total_path_steps = pgsgd::get_total_path_steps(graph);
             cudaMallocManaged(&path_data.paths, path_data.path_count * sizeof(pgsgd::path_t));
             cudaMallocManaged(&path_data.element_array, path_data.total_path_steps * sizeof(pgsgd::path_element_t));
+            pgsgd::fill_path_data(path_data, graph, nthreads);
 
             // precomputed zetas
             double *zetas;
             cudaMallocManaged(&zetas, pgsgd::get_zeta_cnt(space, space_max, space_quantization_step) * sizeof(double));
-
-            pgsgd::fill_pgsgd_data_structure();
+            pgsgd::fill_zetas(zetas, space, space_max, space_quantization_step, theta);
 
 
             const uint64_t block_size = BLOCK_SIZE;
