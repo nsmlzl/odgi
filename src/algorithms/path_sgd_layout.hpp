@@ -8,6 +8,7 @@
 #include <set>
 #include <thread>
 #include <atomic>
+#include <omp.h>
 #include <handlegraph/path_handle_graph.hpp>
 #include <handlegraph/handle_graph.hpp>
 #include "xp.hpp"
@@ -51,6 +52,20 @@ namespace odgi {
                                     const std::string &snapshot_prefix,
                                     std::vector<std::atomic<double>> &X,
                                     std::vector<std::atomic<double>> &Y);
+
+        void compute_layout_cpu(pgsgd::node_data_t &node_data,
+                                pgsgd::path_data_t &path_data,
+                                const uint64_t &nthreads,
+                                double *etas,
+                                double *zetas,
+                                const uint64_t &min_term_updates,
+                                const uint64_t &iter_max,
+                                const uint64_t &first_cooling_iteration,
+                                const uint64_t &space,
+                                const uint64_t &space_max,
+                                const uint64_t &space_quantization_step,
+                                const double &theta);
+
 
         // void path_linear_sgd_layout_gpu(const PathHandleGraph &graph,
         //                             const xp::XP &path_index,

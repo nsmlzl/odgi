@@ -36,6 +36,7 @@ namespace odgi {
             std::cerr << "cooling_start: " << cooling_start << std::endl;
 #endif
             pgsgd::check_valid_graph_dim(graph);
+            const uint64_t first_cooling_iteration = std::floor(cooling_start * (double)iter_max);
 
             // create eta array
             double *etas = new double[iter_max];
@@ -60,7 +61,9 @@ namespace odgi {
             double *zetas = new double[pgsgd::get_zeta_cnt(space, space_max, space_quantization_step)];
             pgsgd::fill_zetas(zetas, space, space_max, space_quantization_step, theta);
 
-            // compute_layout_cpu();
+            compute_layout_cpu(node_data, path_data, nthreads, etas, zetas,
+                    min_term_updates, iter_max, first_cooling_iteration, space,
+                    space_max, space_quantization_step, theta);
 
             pgsgd::copy_node_coords(node_data, X, Y);
 
@@ -71,6 +74,156 @@ namespace odgi {
             delete zetas;
 
             return;
+        }
+
+
+        void compute_layout_cpu(pgsgd::node_data_t &node_data,
+                                pgsgd::path_data_t &path_data,
+                                const uint64_t &nthreads,
+                                double *etas,
+                                double *zetas,
+                                const uint64_t &min_term_updates,
+                                const uint64_t &iter_max,
+                                const uint64_t &first_cooling_iteration,
+                                const uint64_t &space,
+                                const uint64_t &space_max,
+                                const uint64_t &space_quantization_step,
+                                const double &theta) {
+
+            std::vector<uint64_t> path_dist;
+            for (int p = 0; p < path_data.path_count; p++) {
+                path_dist.push_back(uint64_t(path_data.paths[p].step_count));
+            }
+
+#pragma omp parallel num_threads(nthreads)
+            {
+                int tid = omp_get_thread_num();
+
+                XoshiroCpp::Xoshiro256Plus gen(9399220 + tid);
+                std::uniform_int_distribution<uint64_t> flip(0, 1);
+                std::discrete_distribution<> rand_path(path_dist.begin(), path_dist.end());
+
+                const int steps_per_thread = min_term_updates / nthreads;
+
+                for (int iter = 0; iter < iter_max; iter++ ) {
+                    // synchronize all threads before each iteration
+#pragma omp barrier
+                    for (int step = 0; step < steps_per_thread; step++ ) {
+                        // get path
+                        uint32_t path_idx = rand_path(gen);
+                        pgsgd::path_t p = path_data.paths[path_idx];
+                        if (p.step_count < 2) {
+                            continue;
+                        }
+
+                        std::uniform_int_distribution<uint32_t> rand_step(0, p.step_count-1);
+
+                        uint32_t s1_idx = rand_step(gen);
+                        uint32_t s2_idx;
+                        if (iter >= first_cooling_iteration || flip(gen)) {
+                            if (s1_idx > 0 && flip(gen) || s1_idx == p.step_count-1) {
+                                // go backward
+                                uint32_t jump_space = std::min(space, uint64_t(s1_idx));
+                                uint32_t space = jump_space;
+                                if (jump_space > space_max) {
+                                    space = space_max + (jump_space - space_max) / space_quantization_step + 1;
+                                }
+                                dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
+                                dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                                uint32_t z_i = (uint32_t) z(gen);
+                                s2_idx = s1_idx - z_i;
+                            } else {
+                                // go forward
+                                uint32_t jump_space = std::min(space, uint64_t(p.step_count - s1_idx - 1));
+                                uint32_t space = jump_space;
+                                if (jump_space > space_max) {
+                                    space = space_max + (jump_space - space_max) / space_quantization_step + 1;
+                                }
+                                dirtyzipf::dirty_zipfian_int_distribution<uint64_t>::param_type z_p(1, jump_space, theta, zetas[space]);
+                                dirtyzipf::dirty_zipfian_int_distribution<uint64_t> z(z_p);
+                                uint32_t z_i = (uint32_t) z(gen);
+                                s2_idx = s1_idx + z_i;
+                            }
+                        } else {
+                            do {
+                                s2_idx = rand_step(gen);
+                            } while (s1_idx == s2_idx);
+                        }
+                        assert(s1_idx < p.step_count);
+                        assert(s2_idx < p.step_count);
+
+                        uint32_t n1_id = p.elements[s1_idx].node_id;
+                        int64_t n1_pos_in_path = p.elements[s1_idx].pos;
+                        bool n1_is_rev = (n1_pos_in_path < 0)? true: false;
+                        n1_pos_in_path = std::abs(n1_pos_in_path);
+
+                        uint32_t n2_id = p.elements[s2_idx].node_id;
+                        int64_t n2_pos_in_path = p.elements[s2_idx].pos;
+                        bool n2_is_rev = (n2_pos_in_path < 0)? true: false;
+                        n2_pos_in_path = std::abs(n2_pos_in_path);
+
+                        uint32_t n1_seq_length = node_data.nodes[n1_id].seq_length;
+                        bool n1_use_other_end = flip(gen);
+                        if (n1_use_other_end) {
+                            n1_pos_in_path += uint64_t{n1_seq_length};
+                            n1_use_other_end = !n1_is_rev;
+                        } else {
+                            n1_use_other_end = n1_is_rev;
+                        }
+
+                        uint32_t n2_seq_length = node_data.nodes[n2_id].seq_length;
+                        bool n2_use_other_end = flip(gen);
+                        if (n2_use_other_end) {
+                            n2_pos_in_path += uint64_t{n2_seq_length};
+                            n2_use_other_end = !n2_is_rev;
+                        } else {
+                            n2_use_other_end = n2_is_rev;
+                        }
+
+                        double term_dist = std::abs(static_cast<double>(n1_pos_in_path) - static_cast<double>(n2_pos_in_path));
+
+                        if (term_dist < 1e-9) {
+                            term_dist = 1e-9;
+                        }
+
+                        double w_ij = 1.0 / term_dist;
+
+                        double mu = etas[iter] * w_ij;
+                        if (mu > 1.0) {
+                            mu = 1.0;
+                        }
+
+                        double d_ij = term_dist;
+
+                        int n1_offset = n1_use_other_end? 2: 0;
+                        int n2_offset = n2_use_other_end? 2: 0;
+
+                        float *x1 = &node_data.nodes[n1_id].coords[n1_offset];
+                        float *x2 = &node_data.nodes[n2_id].coords[n2_offset];
+                        float *y1 = &node_data.nodes[n1_id].coords[n1_offset + 1];
+                        float *y2 = &node_data.nodes[n2_id].coords[n2_offset + 1];
+
+                        double dx = float(*x1 - *x2);
+                        double dy = float(*y1 - *y2);
+                        if (dx == 0.0) {
+                            dx = 1e-9;
+                        }
+
+                        double mag = sqrt(dx * dx + dy * dy);
+                        double delta = mu * (mag - d_ij) / 2.0;
+                        //double delta_abs = std::abs(delta);
+
+                        double r = delta / mag;
+                        double r_x = r * dx;
+                        double r_y = r * dy;
+
+                        *x1 -= float(r_x);
+                        *y1 -= float(r_y);
+                        *x2 += float(r_x);
+                        *y2 += float(r_y);
+                    }
+                }
+            }
         }
 
 
