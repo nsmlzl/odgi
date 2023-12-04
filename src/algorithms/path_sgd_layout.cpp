@@ -60,7 +60,9 @@ namespace odgi {
             double *zetas = new double[pgsgd::get_zeta_cnt(space, space_max, space_quantization_step)];
             pgsgd::fill_zetas(zetas, space, space_max, space_quantization_step, theta);
 
-            // TODO kernel
+            // compute_layout_cpu();
+
+            pgsgd::copy_node_coords(node_data, X, Y);
 
             delete etas;
             delete node_data.nodes;

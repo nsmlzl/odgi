@@ -74,6 +74,8 @@ namespace odgi {
 
             // TODO kernel
 
+            pgsgd::copy_node_coords(node_data, X, Y);
+
             cudaFree(etas);
             cudaFree(node_data.nodes);
             cudaFree(path_data.paths);

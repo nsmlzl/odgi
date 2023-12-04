@@ -61,6 +61,9 @@ namespace odgi {
 
             void fill_zetas(double *zetas, const uint64_t &space, const uint64_t &space_max,
                     const uint64_t &space_quantization_step, const double &theta);
+
+            void copy_node_coords(node_data_t &node_data,
+                    std::vector<std::atomic<double>> &X, std::vector<std::atomic<double>> &Y);
         }
     }
 }

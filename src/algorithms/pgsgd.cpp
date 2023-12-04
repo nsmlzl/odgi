@@ -137,6 +137,29 @@ namespace odgi {
                 }
             }
 
+
+            void copy_node_coords(node_data_t &node_data,
+                    std::vector<std::atomic<double>> &X, std::vector<std::atomic<double>> &Y) {
+                // copy coords back to X, Y vectors
+                for (int node_idx = 0; node_idx < node_data.node_count; node_idx++) {
+                    node_t *n = &(node_data.nodes[node_idx]);
+                    // coords[0], coords[1], coords[2], coords[3] are stored consecutively. 
+                    float *coords = n->coords;
+                    // check if coordinates valid (not NaN or infinite)
+                    for (int i = 0; i < 4; i++) {
+                        if (!isfinite(coords[i])) {
+                            std::cout << "WARNING: invalid coordiate" << std::endl;
+                        }
+                    }
+                    X[node_idx * 2].store(double(coords[0]));
+                    Y[node_idx * 2].store(double(coords[1]));
+                    X[node_idx * 2 + 1].store(double(coords[2]));
+                    Y[node_idx * 2 + 1].store(double(coords[3]));
+                    //std::cout << "coords of " << node_idx << ": [" << X[node_idx*2] << "; " << Y[node_idx*2] << "] ; [" << X[node_idx*2+1] << "; " << Y[node_idx*2+1] <<"]\n";
+                }
+
+            }
+
         }
     }
 }
