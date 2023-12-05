@@ -1,5 +1,9 @@
 #pragma once
 
+#include <atomic>
+#include <iostream>
+#include <math.h>
+
 #include <curand.h>
 #include <curand_kernel.h>
 
@@ -7,10 +11,7 @@
 #include "xp.hpp"
 #include <handlegraph/path_handle_graph.hpp>
 #include <handlegraph/handle_graph.hpp>
-#include <atomic>
 #include "algorithms/pgsgd.h"
-
-#include <iostream>
 
 
 #define SM_COUNT 84
