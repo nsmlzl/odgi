@@ -107,8 +107,8 @@ namespace odgi {
                 std::atomic<uint64_t> term_updates;
                 term_updates.store(0);
                 // learning rate
-                std::atomic<double> eta;
-                eta.store(etas.front());
+                //std::atomic<double> eta;
+                //eta.store(etas.front());
                 // adaptive zip theta
                 std::atomic<double> adj_theta;
                 adj_theta.store(theta);
@@ -197,6 +197,7 @@ namespace odgi {
                         //std::cerr << std::endl << "setting cooling!!" << std::endl;
                         cooling = true;
                     }
+                    double eta = etas[iter];
 #pragma omp barrier
                     for (int step = 0; step < steps_per_thread; step++ ) {
                             // while (work_todo.load()) {
@@ -321,7 +322,7 @@ namespace odgi {
 #ifdef debug_path_sgd
                                     std::cerr << "w_ij = " << w_ij << std::endl;
 #endif
-                                    double mu = eta.load() * w_ij;
+                                    double mu = eta * w_ij;
                                     if (mu > 1) {
                                         mu = 1;
                                     }
