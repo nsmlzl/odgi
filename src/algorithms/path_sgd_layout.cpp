@@ -48,12 +48,12 @@ namespace odgi {
             using namespace std::chrono_literals; // for timing stuff
             uint64_t num_nodes = graph.get_node_count();
             // is a snapshot in progress?
-            atomic<bool> snapshot_in_progress;
-            snapshot_in_progress.store(false);
+            // atomic<bool> snapshot_in_progress;
+            // snapshot_in_progress.store(false);
             // here we record which snapshots were already processed
-            std::vector<atomic<bool>> snapshot_progress(iter_max);
+            // std::vector<atomic<bool>> snapshot_progress(iter_max);
             // we will produce one less snapshot compared to iterations
-            snapshot_progress[0].store(true);
+            // snapshot_progress[0].store(true);
             // seed them with the graph order
             uint64_t len = 0;
             // the longest path length measured in nucleotides
@@ -113,64 +113,68 @@ namespace odgi {
                 std::atomic<double> adj_theta;
                 adj_theta.store(theta);
                 // if we're in a final cooling phase (last 10%) of iterations
-                std::atomic<bool> cooling;
-                cooling.store(false);
+                // std::atomic<bool> cooling;
+                // cooling.store(false);
                 // our max delta
                 std::atomic<double> Delta_max;
                 Delta_max.store(0);
                 // should we keep working?
-                std::atomic<bool> work_todo;
-                work_todo.store(true);
+                // std::atomic<bool> work_todo;
+                // work_todo.store(true);
                 // approximately what iteration we're on
-                uint64_t iteration = 0;
+                // uint64_t iteration = 0;
                 // launch a thread to update the learning rate, count iterations, and decide when to stop
-                auto checker_lambda =
-                        [&]() {
-                            while (work_todo.load()) {
-                                if (term_updates.load() > min_term_updates) {
-                                    if (snapshot) {
-                                        if (snapshot_progress[iteration].load() || iteration == iter_max) {
-                                            iteration++;
-                                            if (iteration == iter_max) {
-                                                snapshot_in_progress.store(false);
-                                            } else {
-                                                snapshot_in_progress.store(true);
-                                            }
-                                        } else {
-                                            snapshot_in_progress.store(true);
-                                            continue;
-                                        }
-                                    } else {
-                                        iteration++;
-                                        snapshot_in_progress.store(false);
-                                    }
-                                    if (iteration >= iter_max) {
-                                        work_todo.store(false);
-                                    } else if (Delta_max.load() <= delta) { // nb: this will also break at 0
-                                        if (progress) {
-                                            std::cerr << "[odgi::path_linear_sgd_layout] delta_max: " << Delta_max.load()
-                                                      << " <= delta: "
-                                                      << delta << ". Threshold reached, therefore ending iterations."
-                                                      << std::endl;
-                                        }
-                                        work_todo.store(false);
-                                    } else {
-                                        eta.store(etas[iteration]); // update our learning rate
-                                        Delta_max.store(delta); // set our delta max to the threshold
-                                        if (iteration >= first_cooling_iteration) {
-                                            //std::cerr << std::endl << "setting cooling!!" << std::endl;
-                                            adj_theta.store(0.001);
-                                            cooling.store(true);
-                                        }
-                                    }
-                                    term_updates.store(0);
-                                }
-                                std::this_thread::sleep_for(1ms);
-                            }
-                        };
+                //auto checker_lambda =
+                //        [&]() {
+                //            while (work_todo.load()) {
+                //                if (term_updates.load() > min_term_updates) {
+                //                    if (snapshot) {
+                //                        if (snapshot_progress[iteration].load() || iteration == iter_max) {
+                //                            iteration++;
+                //                            if (iteration == iter_max) {
+                //                                snapshot_in_progress.store(false);
+                //                            } else {
+                //                                snapshot_in_progress.store(true);
+                //                            }
+                //                        } else {
+                //                            snapshot_in_progress.store(true);
+                //                            continue;
+                //                        }
+                //                    } else {
+                //                        iteration++;
+                //                        snapshot_in_progress.store(false);
+                //                    }
+                //                    if (iteration >= iter_max) {
+                //                        work_todo.store(false);
+                //                    } else if (Delta_max.load() <= delta) { // nb: this will also break at 0
+                //                        if (progress) {
+                //                            std::cerr << "[odgi::path_linear_sgd_layout] delta_max: " << Delta_max.load()
+                //                                      << " <= delta: "
+                //                                      << delta << ". Threshold reached, therefore ending iterations."
+                //                                      << std::endl;
+                //                        }
+                //                        work_todo.store(false);
+                //                    } else {
+                //                        eta.store(etas[iteration]); // update our learning rate
+                //                        Delta_max.store(delta); // set our delta max to the threshold
+                //                        if (iteration > first_cooling_iteration) {
+                //                            //std::cerr << std::endl << "setting cooling!!" << std::endl;
+                //                            adj_theta.store(0.001);
+                //                            cooling.store(true);
+                //                        }
+                //                    }
+                //                    term_updates.store(0);
+                //                }
+                //                std::this_thread::sleep_for(1ms);
+                //            }
+                //        };
 
-                auto worker_lambda =
-                        [&](uint64_t tid) {
+                auto start_compute = std::chrono::high_resolution_clock::now();
+#pragma omp parallel num_threads(nthreads)
+            {
+                int tid = omp_get_thread_num();
+                // auto worker_lambda =
+                //         [&](uint64_t tid) {
                             // everyone tries to seed with their own random data
                             const std::uint64_t seed = 9399220 + tid;
                             XoshiroCpp::Xoshiro256Plus gen(seed); // a nice, fast PRNG
@@ -182,8 +186,21 @@ namespace odgi {
                             std::uniform_int_distribution<uint64_t> dis_step = std::uniform_int_distribution<uint64_t>(0, np_bv.size() - 1);
                             std::uniform_int_distribution<uint64_t> flip(0, 1);
                             uint64_t term_updates_local = 0;
-                            while (work_todo.load()) {
-                                if (!snapshot_in_progress.load()) {
+
+
+                const int steps_per_thread = min_term_updates / nthreads;
+
+                for (int iter = 0; iter < iter_max; iter++ ) {
+                    bool cooling = false;
+                    // synchronize all threads before each iteration
+                    if (iter > first_cooling_iteration) {
+                        //std::cerr << std::endl << "setting cooling!!" << std::endl;
+                        cooling = true;
+                    }
+#pragma omp barrier
+                    for (int step = 0; step < steps_per_thread; step++ ) {
+                            // while (work_todo.load()) {
+                            //     if (!snapshot_in_progress.load()) {
                                     // sample the first node from all the nodes in the graph
                                     // pick a random position from all paths
                                     uint64_t step_index = dis_step(gen);
@@ -209,7 +226,7 @@ namespace odgi {
                                     std::cerr << "step rank in path: " << nr_iv[step_index]  << std::endl;
 #endif
 
-                                    if (cooling.load() || flip(gen)) {
+                                    if (cooling || flip(gen)) {
                                         if (s_rank > 0 && flip(gen) || s_rank == path_step_count-1) {
                                             // go backward
                                             uint64_t jump_space = std::min(space, s_rank);
@@ -383,55 +400,53 @@ namespace odgi {
                             }
                         };
 
-                auto snapshot_lambda =
-                        [&]() {
-                            uint64_t iter = 0;
-                            while (snapshot && work_todo.load()) {
-                                if ((iter < iteration) && iteration != iter_max) {
-                                    std::cerr << "[odgi::path_linear_sgd_layout] snapshot thread: Taking snapshot!" << std::endl;
-                                    // drop out of atomic stuff... maybe not the best way to do this
-                                    std::vector<double> X_iter(X.size());
-                                    uint64_t i = 0;
-                                    for (auto &x : X) {
-                                        X_iter[i++] = x.load();
-                                    }
-                                    std::vector<double> Y_iter(Y.size());
-                                    i = 0;
-                                    for (auto &y : Y) {
-                                        Y_iter[i++] = y.load();
-                                    }
-                                    algorithms::layout::Layout layout(X_iter, Y_iter);
-                                    std::string local_snapshot_prefix = snapshot_prefix + std::to_string(iter + 1);
-                                    ofstream snapshot_out(local_snapshot_prefix);
-                                    // write out
-                                    layout.serialize(snapshot_out);
-                                    iter = iteration;
-                                    snapshot_in_progress.store(false);
-                                    snapshot_progress[iter].store(true);
-                                }
-                                std::this_thread::sleep_for(1ms);
-                            }
+                // auto snapshot_lambda =
+                //         [&]() {
+                //             uint64_t iter = 0;
+                //             while (snapshot && work_todo.load()) {
+                //                 if ((iter < iteration) && iteration != iter_max) {
+                //                     std::cerr << "[odgi::path_linear_sgd_layout] snapshot thread: Taking snapshot!" << std::endl;
+                //                     // drop out of atomic stuff... maybe not the best way to do this
+                //                     std::vector<double> X_iter(X.size());
+                //                     uint64_t i = 0;
+                //                     for (auto &x : X) {
+                //                         X_iter[i++] = x.load();
+                //                     }
+                //                     std::vector<double> Y_iter(Y.size());
+                //                     i = 0;
+                //                     for (auto &y : Y) {
+                //                         Y_iter[i++] = y.load();
+                //                     }
+                //                     algorithms::layout::Layout layout(X_iter, Y_iter);
+                //                     std::string local_snapshot_prefix = snapshot_prefix + std::to_string(iter + 1);
+                //                     ofstream snapshot_out(local_snapshot_prefix);
+                //                     // write out
+                //                     layout.serialize(snapshot_out);
+                //                     iter = iteration;
+                //                     snapshot_in_progress.store(false);
+                //                     snapshot_progress[iter].store(true);
+                //                 }
+                //                 std::this_thread::sleep_for(1ms);
+                //             }
 
-                        };
+                //         };
 
-                auto start_compute = std::chrono::high_resolution_clock::now();
+                // std::thread checker(checker_lambda);
+                // std::thread snapshot_thread(snapshot_lambda);
 
-                std::thread checker(checker_lambda);
-                std::thread snapshot_thread(snapshot_lambda);
+                // std::vector<std::thread> workers;
+                // workers.reserve(nthreads);
+                // for (uint64_t t = 0; t < nthreads; ++t) {
+                //     workers.emplace_back(worker_lambda, t);
+                // }
 
-                std::vector<std::thread> workers;
-                workers.reserve(nthreads);
-                for (uint64_t t = 0; t < nthreads; ++t) {
-                    workers.emplace_back(worker_lambda, t);
-                }
+                // for (uint64_t t = 0; t < nthreads; ++t) {
+                //     workers[t].join();
+                // }
 
-                for (uint64_t t = 0; t < nthreads; ++t) {
-                    workers[t].join();
-                }
+                // snapshot_thread.join();
 
-                snapshot_thread.join();
-
-                checker.join();
+                // checker.join();
 
                 auto end_compute = std::chrono::high_resolution_clock::now();
                 uint32_t duration_compute_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_compute - start_compute).count();
